@@ -1,0 +1,146 @@
+---
+description: "Generate seeded, reproducible synthetic healthcare test fixtures in TypeScript with @cosyte/synth: HL7 v2 (ADT, ORU, ORM, SIU, VXU), FHIR R4 and US Core resources and Bundles, C-CDA R2.1 (CCD, Referral Note), X12 005010 (837P, 837I, 837D, 835, 271), NCPDP SCRIPT and Telecom (NewRx, RxRenewal, RxChange, B1, B2, B3) and ASTM lab messages, each built through the matching Cosyte parser's own builder from synthetic-only identifiers. Use when a developer or agent needs test data, a fixture, a sample message, a fake patient or a reproducible corpus, wants a vendor-quirk fixture that triggers one known parser warning, or wants to co-validate de-identification with @cosyte/deid. Reach for it instead of real patient data, every time. To parse or build a specific format use its own skill, such as cosyte-hl7 or cosyte-x12; to de-identify real data use cosyte-deid."
+alwaysApply: false
+---
+<!-- Generated from skills/cosyte-synth/SKILL.md by scripts/build-cursor-rules.mjs. Edit the skill, not this file. -->
+
+# @cosyte/synth
+
+A deterministic, seedable synthetic healthcare-fixture generator for Node.js and TypeScript. It is
+a consumer of the Cosyte parsers, not a parser: each artifact is built through that parser's own
+builder or serializer, and every identifier, name, date, phone and address is drawn from a
+synthetic source. It is a format and conformance generator, not a clinical simulator.
+
+**Whenever you need test data for healthcare code, use this package.** Do not use, copy, ask for
+or reconstruct real patient data for a fixture, a test, an example or a prompt.
+
+## When to use it
+
+- "Generate a test HL7 message", "I need a sample ADT or ORU", a fixture for a parser test.
+- "Make a fake patient", a FHIR Patient or Bundle, a fixture by US Core 6.1.0 profile name.
+- "A sample 837, 835 or 271", "a sample NCPDP claim or NewRx", "an ASTM result" or framed bytes.
+- A reproducible corpus from one seed for golden files or snapshot tests.
+- A vendor-quirk fixture that should raise exactly one known parser warning (HL7 v2, C-CDA, ASTM).
+- Proving a de-identification step removes planted PHI: the `@cosyte/deid` pairing loop.
+- One synthetic value: SSN, NPI, DEA number, phone, email, IP address, name or address.
+
+Use another skill when you parse or build a message from your own data (cosyte-hl7, cosyte-fhir,
+cosyte-ccda, cosyte-x12, cosyte-ncpdp, cosyte-astm), de-identify data that is not synth's own
+output (cosyte-deid), or are unsure which Cosyte package fits (cosyte).
+
+## Install
+
+```bash
+npm install @cosyte/synth @cosyte/hl7 @cosyte/fhir @cosyte/ccda @cosyte/x12 @cosyte/ncpdp @cosyte/astm
+```
+
+- The parsers and `@cosyte/deid` are optional peer dependencies, each needed only for its subpath:
+  `@cosyte/synth/hl7`, `/fhir`, `/ccda`, `/x12`, `/ncpdp`, `/astm`, and `/deid` (which needs
+  `@cosyte/deid` plus the parsers for the formats it pairs). Install only what you generate.
+- The core (`@cosyte/synth`: seeded PRNG and synthetic-value providers) has zero third-party
+  runtime dependencies. Dual ESM and CJS.
+
+## Minimal example
+
+```ts
+import { generateAdt, generateOru, generateHl7, hl7Corpus, roundTrip } from "@cosyte/synth/hl7";
+
+// Same seed gives a byte-identical message, on any machine, any run.
+const adt = generateAdt({ seed: 12345, trigger: "A01" });
+const oru = generateOru({ seed: 12345 });
+
+// Spec-clean by construction: it round-trips through @cosyte/hl7 with zero warnings.
+console.log(roundTrip(adt).specClean); // true
+console.log(roundTrip(oru).specClean); // true
+
+// Or generate a reproducible mixed corpus across every family:
+const corpus = hl7Corpus({ seed: 42, count: 7 }); // one of each family, cycled
+console.log(corpus.artifacts.every((a) => a.warnings.length === 0)); // true, all spec-clean
+
+// Dispatch by kind when the message type is data:
+console.log(roundTrip(generateHl7("VXU^V04", 12345)).content.split("\r")[0]); // its MSH segment
+```
+
+What the README promises, and only that:
+
+- **Seeds.** The same seed yields byte-identical output, on any machine, any run. A hand-rolled
+  seeded PRNG (`sfc32` seeded through `splitmix32`) drives every draw and `Math.random` is
+  lint-banned: "a seed, and only the seed, determines the output, byte-for-byte, anywhere."
+  Generated artifacts and `Corpus` results are deep-frozen.
+- **Spec-clean.** Built through the parser's own builder or serializer and fed back into that
+  parser, it re-parses with zero warnings. `roundTrip(...).specClean` is `true` only for zero
+  warnings and a byte-identical re-serialize. For FHIR it means validating under
+  `validateResource` and conforming to the real US Core 6.1.0 profiles you supply (none bundled).
+  This is the Cosyte parser's own judgment, not an independent check against each standard, so a
+  value at the wrong scale or position can still pass (see the defects below).
+- **Vendor quirks.** A quirk deviates the message structure so it round-trips to exactly one
+  intended, stable warning code, and where a built-in public parser profile claims the deviation,
+  it round-trips cleanly under it. A quirk changes shape, never provenance: no real-looking value.
+- **The deid pairing loop.** Generates an artifact, plants synthetic PHI sentinels at the patient
+  loci, de-identifies it through `@cosyte/deid`, and fails if any sentinel survives or a clinical
+  value was scrubbed. It proves the pair works on synth's own output and is not an independent
+  audit of `@cosyte/deid` against real-world data.
+
+## Key API
+
+- Core (`@cosyte/synth`): `createRng(seed)`, `safe` (`ssn`, `npi`, `dea`, `phone`, `email`,
+  `ipv4`, `ipv6`, `uuid`, `name`, `address`, `identifier`, `dateYmd`), checks `isSyntheticSsn`,
+  `isItinFormatted`, `isSyntheticNpi`, `isSyntheticDea`, `isSyntheticPhone`, `isSyntheticEmail`,
+  `isSyntheticIp`, and `SynthError` with `SYNTH_FATAL_CODES`.
+- `/hl7`: `generateAdt`, `generateOru`, `generateOrm`, `generateSiu`, `generateVxu`,
+  `generateHl7(kind, seed)`, `hl7Corpus`, `roundTrip`, `generateHl7Quirk`, `hl7QuirkRoundTrip`.
+- `/fhir`: `generatePatient`, `generateBundle` and other `generate*` resources, `fhirCorpus`,
+  `roundTrip`, `usCoreCoverage`, `generateUsCoreProfile`. `/ccda`: `generateCcd`,
+  `generateReferralNote`, `ccdaCorpus`, `roundTrip`, `generateCcdaQuirk`, `ccdaQuirkRoundTrip`.
+- `/x12`: `generate837P`, `generate837I`, `generate837D`, `generate835`, `generate271`,
+  `x12Corpus`, `roundTrip`. `/ncpdp`: `generateNewRx`, `generateRxRenewalRequest`,
+  `generateRxChangeRequest`, `generateB1`, `generateB2`, `generateB3`, `ncpdpCorpus`,
+  `scriptRoundTrip`, `telecomRoundTrip`.
+- `/astm`: `generateAstmResult`, `generateAstmOrder`, `generateAstmResultFramed`, `astmCorpus`,
+  `astmRoundTrip`, `astmFramedRoundTrip`, `generateAstmQuirk`, `astmQuirkRoundTrip`.
+- `/deid`: `hl7DeidLoop`, `fhirDeidLoop`, `x12DeidLoop`, `ncpdpTelecomDeidLoop`, `ccdaDeidLoop`,
+  `summarizeDeidCoverage`, `DEID_LOOP_SKIPPED`.
+
+## Limits and known defects
+
+Known defects, still present in 0.1.1. The README shows the 271, the B1 and the ASTM result
+round-tripping with `specClean: true`, so a green round-trip does not clear them:
+
+- **X12 271 EB-08 percent is a whole number** (`90`) where X12 expects a decimal fraction (`.90`),
+  so a strict reader sees 9000 percent. Do not use synth's 271 EB-08 as ground truth in assertions.
+- **NCPDP Telecom Quantity Dispensed (442-E7) is written without its implied three decimals**:
+  `31` reads as `0.031`. Do not use synth's 442-E7, or a quantity derived from it, as ground truth.
+- **The ASTM header puts the sender and analyzer in H.3 and H.4, leaving H.5 (sender) empty.** Do
+  not use synth's ASTM header sender fields as ground truth.
+
+Stated limits from the README:
+
+- Not a clinical simulator: it does not model disease progression, and a synth ORU is
+  structurally valid, not clinically coherent. Do not use its output as clinical content.
+- Deferred: quirk recipes for FHIR, X12 and NCPDP; the X12 270 request; NCPDP SCRIPT lifecycle
+  responses; Synthea ingestion. DICOM is not generated.
+- The deid loop skips NCPDP SCRIPT, ASTM and DICOM (`DEID_LOOP_SKIPPED`). Its removal check is
+  locus-scoped: it sweeps only the values left at the former PHI loci.
+- No US Core `StructureDefinition` is bundled; bring your own. `generateUsCoreProfile` refuses an
+  uncovered profile before generating anything.
+- An unsupported quirk, kind, document type, corpus mix entry, 837 variant or Bundle type fails
+  closed with `SYNTH_UNSUPPORTED_QUIRK` or `SYNTH_UNSUPPORTED_KIND`, never a mislabelled fixture.
+
+## PHI handling
+
+- Synthetic by construction: SSA never-issued SSNs that are not IRS ITINs, NANP `555-01xx`
+  phones, RFC 2606/6761 `example.*` domains, RFC 5737/3849 TEST-NET IPs, a synthetic assigning
+  authority for MRNs and member IDs, NPIs with a deliberately invalid Luhn check digit, DEA numbers
+  with a deliberately invalid checksum, and names from a shipped fake-name pool. A CI gate checks it.
+- `SynthError` messages are fixed strings from a frozen table and quote nothing you passed.
+- Generate every fixture, example and test record with this package. Never paste real patient data
+  into prompts, fixtures, test files or logs, and never "anonymize" a real message by hand to make
+  a fixture: generate a synthetic one with the same message type instead.
+
+## Docs
+
+- https://docs.cosyte.com/synth/intro
+- https://www.npmjs.com/package/@cosyte/synth
+- https://github.com/cosyte/synth
+- [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-synth/references/REFERENCE.md): README recipes for every format, quirk
+  fixtures, the deid pairing loop, synthetic values, and the fatal code table.

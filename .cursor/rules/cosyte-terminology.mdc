@@ -1,0 +1,159 @@
+---
+description: "Run FHIR terminology operations over code systems, value sets and maps you supply, in TypeScript with @cosyte/terminology. Use when a developer wants to resolve a code system OID or mnemonic to its canonical URI, translate a code through a FHIR ConceptMap ($translate), look up or validate a code ($lookup, $validate-code) in a release loaded from RRF, CSV, fixed-width or FHIR CodeSystem JSON, expand a ValueSet or test membership ($expand), validate or compare UCUM units, map ICD-9-CM to ICD-10-CM with the CMS GEMs, apply the SNOMED CT to ICD-10-CM complex map, or walk an RxNorm release (ingredients, brands, generics, NDC to RXCUI). It bundles no SNOMED CT, LOINC, CPT, RxNorm or VSAC content. For reading FHIR resources use cosyte-fhir; for C-CDA documents use cosyte-ccda; for HL7 v2 to FHIR conversion use cosyte-transform."
+alwaysApply: false
+---
+<!-- Generated from skills/cosyte-terminology/SKILL.md by scripts/build-cursor-rules.mjs. Edit the skill, not this file. -->
+
+# @cosyte/terminology
+
+A zero-dependency terminology engine for US healthcare code systems. It is not a wire parser: it
+mirrors the FHIR Terminology Module (`$translate`, `$lookup`, `$validate-code`, `$expand`) over FHIR
+resources and standard releases you supply, and it never fabricates a code.
+
+## When to use it
+
+- "What system is OID 2.16.840.1.113883.6.1", "normalize this code system identifier".
+- "Translate this code with our ConceptMap", "is this mapping 1:1 or 1:many".
+- Load LOINC CSV, RxNorm or UMLS RRF, the ICD-10-CM order file or a FHIR CodeSystem, then look up a
+  display or check a code (deprecated and not-billable status carried through).
+- Expand a ValueSet, or decide whether a coding is in one.
+- "Is `mg/dl` valid UCUM", "are `mmol/L` and `mmol.L-1` the same unit".
+- ICD-9-CM to ICD-10-CM (or back) with the CMS GEM files; SNOMED CT to ICD-10-CM with the NLM
+  complex map.
+- RxNorm: ingredients of a drug, generic for a brand, NDC to RXCUI.
+
+Use another skill when:
+
+- Reading or validating FHIR resources: `cosyte-fhir` (it takes a terminology service you implement).
+- Reading a C-CDA document: `cosyte-ccda` (its README says its `TerminologyAdapter` mirrors this
+  engine, so you can wire the engine in behind it).
+- You are converting HL7 v2 to FHIR: `cosyte-transform`.
+
+## Install
+
+```bash
+npm install @cosyte/terminology
+```
+
+Zero runtime dependencies (Node standard library only). Dual ESM and CJS, built with `tsup` and
+checked with `attw`. The README does not state a Node version; check `engines` in the installed
+`package.json`. Runnable programs are in the repository's `examples/` folder.
+
+## Minimal example
+
+```ts
+import { isUnknownSystem, loadCodeSystem, loadConceptMap, lookup, resolveSystem } from "@cosyte/terminology";
+import { translate, ucumEqual, validateUcum } from "@cosyte/terminology";
+
+// 1. Resolve an OID, a mnemonic or a URI to the canonical system URI.
+const loinc = resolveSystem("2.16.840.1.113883.6.1");
+console.log(isUnknownSystem(loinc) ? "unknown" : loinc.url);
+
+// 2. $translate through a ConceptMap you supply (an inline example map here).
+const map = loadConceptMap({
+  resourceType: "ConceptMap",
+  url: "http://example.org/cm/gender",
+  group: [
+    {
+      source: "http://hl7.org/fhir/administrative-gender",
+      target: "http://terminology.hl7.org/CodeSystem/v2-0001",
+      element: [{ code: "male", target: [{ code: "M", equivalence: "equivalent" }] }],
+    },
+  ],
+});
+const result = translate({ system: "http://hl7.org/fhir/administrative-gender", code: "male" }, map);
+if (result.unmapped) {
+  console.log("unmapped", result.mode); // a typed outcome, never a guessed target
+} else {
+  for (const match of result.matches) console.log(match.target.code, match.equivalence);
+}
+
+// 3. $lookup in a code system you load (a tiny FHIR CodeSystem here).
+const cs = loadCodeSystem({
+  format: "fhir",
+  resource: {
+    resourceType: "CodeSystem",
+    url: "http://example.org/cs",
+    concept: [{ code: "a", display: "Alpha" }],
+  },
+});
+const hit = lookup(cs, "a");
+console.log(hit.found ? hit.display : hit.code);
+console.log(lookup(cs, "zz").found); // an unknown code is TERM_CODE_UNKNOWN, never a made-up display
+
+// 4. UCUM recognition and canonicalization only: no magnitude conversion.
+console.log(validateUcum("mmol/L").valid, ucumEqual("N", "kg.m/s2"), ucumEqual("mg", "g"));
+```
+
+Expected output. Most lines are values the README asserts; the rest follow from the type
+declarations. We have not run this exact snippet.
+
+```text
+http://loinc.org
+M equivalent
+Alpha
+false
+true true false
+```
+
+## Key API
+
+- `resolveSystem(id)`, `isUnknownSystem`, `SYSTEM_IDENTITIES`.
+- `loadConceptMap(json)`, `translate(coding, map)`: matches, or a typed `TERM_TRANSLATE_UNMAPPED`.
+- `loadCodeSystem(source)` (`format` `"rrf"`, `"csv"`, `"fixed-width"`, `"fhir"`), `lookup`,
+  `validateCode`.
+- `loadValueSet(json)`, `expand(vs, ctx?)`, `validateCodeInValueSet(coding, vs, ctx?)`.
+- `validateUcum(unit)`, `ucumEqual(a, b)`.
+- `loadGems`, `applyGem` (`invertGem` always throws); `loadComplexMap`, `applyComplexMap`.
+- `loadRxNormGraph`, `ingredientsOf`, `genericFor`, `brandsFor`, `doseFormsOf`, `consistsOf`,
+  `resolveNdc`, `approximateMatch` (opt-in, results marked `approximate: true`).
+- `TerminologyError` (`code` from `FATAL_CODES`) for unusable input; `DIAGNOSTIC_CODES` for typed
+  outcomes and load warnings.
+
+## Limits and known defects
+
+We have no known defects on record for 0.1.1. The README states these limits:
+
+- **No code-system release is bundled.** SNOMED CT, CPT, LOINC, UMLS/RxNorm, the CMS GEM files, the
+  NLM complex-map refset and VSAC value sets are bring-your-own, under their steward's terms. The
+  RxNorm Prescribable Content and ICD-10-CM content packs are not bundled either. Do not tell a user
+  a lookup works until they supply the release.
+- **What is bundled:** the UCUM table (`ucum-essence.xml` version 2.2, revision-date 2024-06-17,
+  copyright Regenstrief Institute, reproduced verbatim under the UCUM licence, notice at
+  `vendor/ucum/NOTICE.md`); code-system identity facts (`SYSTEM_IDENTITIES`); the SNOMED CT
+  concepts the crosswalk resolver names (`MAP_CATEGORIES` and two gender findings); RxNorm
+  relationship and term-type names (`RELA`, `RELA_INVERSE`, `TERM_TYPES`). Some SNOMED CT, ICD-10-CM
+  and RxNorm identifiers also appear in API documentation examples.
+- No UCUM magnitude conversion (`mg/dL` to `mmol/L` is refused). Case-sensitive UCUM only; a
+  case-insensitive spelling is `TERM_UCUM_INVALID`.
+- Maps are never inverted: load the other-direction GEM file instead. Unmapped and unknown results
+  are typed, never guessed; a 1:many map returns every candidate, so do not pick one silently.
+- `expand` can return `complete: false` (then `contains` is a lower bound), and
+  `validateCodeInValueSet` can return `undetermined: true` rather than a fabricated `false`.
+- RxNorm is navigated along authored edges only: an `SCD` has no ingredient edge (use `consistsOf`,
+  then `ingredientsOf`). Read the `tty` of every result.
+- Conformance claims are partial (ValueSet: 20 of 101 HL7 ecosystem cases passed, 81 declined;
+  UCUM: validation and conversion case kinds only). Details and other limits are in
+  [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-terminology/references/REFERENCE.md).
+
+## PHI handling
+
+The engine holds code systems, not patient records, but the codes you ask about can be PHI in
+context.
+
+- Diagnostic `message`, `detail`, `reason` and `err.stack` text is value-free: nothing you configured
+  or loaded reaches it. A locus (line number, column count, index path) sits beside it.
+- Result objects are different: a typed unknown or unmapped outcome names the code, unit or NDC you
+  asked about. Log the `code` and the locus, not the whole result.
+- `applyComplexMap` can take a `PatientContext` (`ageYears`, `gender`); treat what you pass in as
+  PHI in your own code.
+- Use synthetic codes and contexts in tests and examples. Never paste real patient data into prompts,
+  fixtures or logs.
+
+## Docs
+
+- https://docs.cosyte.com/terminology/intro
+- https://www.npmjs.com/package/@cosyte/terminology
+- https://github.com/cosyte/terminology
+- [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-terminology/references/REFERENCE.md): API map by task, release formats, ValueSet,
+  crosswalk and RxNorm recipes, and the diagnostic and fatal code lists.

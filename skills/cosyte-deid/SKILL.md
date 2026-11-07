@@ -1,0 +1,168 @@
+---
+name: cosyte-deid
+description: "De-identify healthcare data in Node.js and TypeScript with @cosyte/deid. It applies a HIPAA Safe Harbor policy (18 identifier categories) to parsed HL7 v2 messages, C-CDA documents, FHIR R4 resources, X12 EDI interchanges such as 837, 835 and 270/271, NCPDP Telecom transactions and DICOM metadata, and returns a transformed model plus a value-free manifest. Use when a developer asks to de-identify, anonymize or scrub PHI from a message or file, remove names, MRNs and dates, generalize ZIP codes, pseudonymize identifiers or date-shift a research corpus with a key, plug in a free-text redactor, or build an Expert Determination support report. Its output is Safe-Harbor-transformed per the configured policy, not certified, and needs review. To parse each format use cosyte-hl7, cosyte-ccda, cosyte-fhir, cosyte-x12, cosyte-ncpdp or cosyte-dicom; for synthetic test data use cosyte-synth."
+license: MIT
+metadata:
+  package: "@cosyte/deid"
+  version: "0.1.1"
+  docs: "https://docs.cosyte.com/deid/intro"
+---
+
+# @cosyte/deid
+
+A de-identification library for Node.js and TypeScript. It applies a policy (HIPAA Safe Harbor by
+default) to a structurally located model of a healthcare document and returns a transformed model plus
+a value-free manifest of everything it acted on. The README's honesty line: results are
+"Safe-Harbor-transformed per the configured policy", never labelled "de-identified" and never a
+compliance claim. Safe Harbor is implemented mechanically, the actual-knowledge condition
+(§164.514(b)(2)(ii)) is the consumer's, and Expert Determination (§164.514(b)(1)) is supported, never
+rendered or certified. The certification is always the consumer's.
+
+## When to use it
+
+- "De-identify this HL7 v2 message / C-CDA document / FHIR resource / X12 837 / NCPDP Telecom claim /
+  DICOM file", "strip PHI before we share this extract".
+- Remove or generalize Safe Harbor identifiers: names removed, dates to year, ZIP to a safe 3-digit
+  prefix (or `000`), ages over 89 to `90+`, MRN, health plan and account numbers removed.
+- Keep a research corpus linkable with a key: consistent per-patient date shift and keyed pseudonyms
+  (Expert Determination territory, not Safe Harbor).
+- Get a value-free audit (manifest) of what was removed, generalized, blocked or retained.
+- Hand a statistician a structured Expert Determination support report.
+- Run your own redactor over narrative fields instead of blocking them.
+
+Use another skill when:
+
+- Parsing or building the source format: cosyte-hl7, cosyte-ccda, cosyte-fhir, cosyte-x12,
+  cosyte-ncpdp, cosyte-dicom. For DICOM Annex E Retain or Clean options, use `deidentify` from
+  `@cosyte/dicom` (cosyte-dicom): this package's DICOM adapter takes only `policy`, `uidMap` and
+  `uidRoot`.
+- NCPDP SCRIPT: this package refuses it. ASTM: the README lists no adapter for it.
+- Synthetic test fixtures: cosyte-synth. The `cosyte redact` command: cosyte-cli.
+
+## Install
+
+```bash
+npm install @cosyte/deid
+# plus the parser for each format you de-identify, for example:
+npm install @cosyte/deid @cosyte/hl7
+```
+
+- The core has zero third-party runtime dependencies (every primitive is `node:crypto`). Each adapter
+  is a subpath (`@cosyte/deid/hl7`, `/ccda`, `/fhir`, `/x12`, `/ncpdp`, `/dicom`) whose parser
+  (`@cosyte/hl7`, `@cosyte/ccda`, `@cosyte/fhir`, `@cosyte/x12`, `@cosyte/ncpdp`, `@cosyte/dicom`) is
+  an optional peer dependency, every one with the range `>=0.0.0`.
+- `package.json`: `engines.node` `>=22.0.0`; ESM and CJS builds with types for every entry point.
+- For NCPDP, install `@cosyte/ncpdp` 0.1.x or later (see Limits).
+
+## Minimal example
+
+The README's core example, with placeholder values in the shape of an HL7 v2 name and date of birth.
+
+```ts
+import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+
+const name = "ZZFAMILY^ZZGIVEN";
+const dob = "19900215";
+
+const { document, manifest } = deidentify(
+  {
+    loci: [
+      { path: "PID-5", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.NAMES, value: name },
+      { path: "PID-7", kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: dob },
+      { path: "OBX-5", kind: "clinical", value: "5.4 mmol/L" },
+    ],
+  },
+  {},
+);
+
+console.log(document.loci.map((locus) => locus.value));
+console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.disposition}`));
+```
+
+```text
+[ null, '1990', '5.4 mmol/L' ]
+[ 'PID-5 NAMES removed', 'PID-7 DATES transformed' ]
+```
+
+## Key API
+
+- Adapters, each `(input, options?)` returning the transformed model, `manifest` and
+  `unexaminedResiduals`: `deidentifyHl7` (`@cosyte/deid/hl7`), `deidentifyCcda` (`/ccda`),
+  `deidentifyFhir` and `deidentifyFhirJson` (`/fhir`), `deidentifyX12` and `deidentifyX12String`
+  (`/x12`, returns `x12` text), `deidentifyTelecom` and `deidentifyTelecomString` (`/ncpdp`, returns
+  `telecom` text).
+- `deidentifyDicom(dataset, options?)` and `deidentifyDicomBuffer(bytes, options?)` (`/dicom`): also
+  return `warnings`, `burnedInAnnotationHazard`, `metadataOnly: true`, `uidReferentialIntegrity`,
+  `deidentificationMethodCodes` and `optionDeclarations`. Options: `policy`, `uidMap`, `uidRoot`.
+- `deidentify(model, options)`: the format-agnostic core over `{ loci }`. `DeidOptions`: `policy`,
+  `retainedLoci`, `context`, `redactor`.
+- `createDeidContext({ key, dateShiftSeed?, patientId?, maxShiftDays? })`, `createDeidRegistry({ key })`
+  with `forPatient`, `pseudonym`, `remapUid`.
+- `SAFE_HARBOR_POLICY`, `defineDeidPolicy`, `SAFE_HARBOR_PROFILE`, `LIMITED_DATA_SET_PROFILE`,
+  `defineDeidProfile` (can only tighten), `profileOptions(profile, context?, overrides?)`.
+- `buildExpertDeterminationSupportReport(manifests, options?)` (its `determination` is always `null`),
+  `formatExpertDeterminationSupportReport(report)`, `EXPERT_DETERMINATION_DISCLAIMER`.
+- `FreeTextRedactor` (type), `SAFE_HARBOR_CATEGORIES`, `DEID_DISPOSITION_CODES`, `OUTPUT_LABEL`,
+  `WITHHELD_LOCUS_TOKEN`, `DeidError` with `code` from `FATAL_CODES`.
+
+## Limits and known defects
+
+- Do not describe output as de-identified, compliant or certified. Use the `OUTPUT_LABEL` wording,
+  "Safe-Harbor-transformed per the configured policy". Review the output, the manifest and
+  `unexaminedResiduals` before anything leaves your control.
+- Free text is block-by-default: no NLP model and no built-in regex scrub. A BYO redactor's result is
+  trusted as consumer-asserted and not re-scanned; its completeness is yours. If it throws or returns
+  nothing, the locus is blocked.
+- Positions no rule names are not de-identified; a pass counts them on `unexaminedResiduals`, and a
+  count is not a removal. Examples from the README: HL7 v2 provider names (PV1-7/8, OBR-16) and GT1-51
+  in retained segments; C-CDA entry service dates, entry ids, in-entry performer names and
+  family-history demographics; a FHIR `ContactPoint` outside a person resource, an organisation's
+  `name`, an employer `Organization` resource. Hand `unexaminedResiduals` to the support report.
+- NCPDP SCRIPT is refused with `DEID_FORMAT_UNSUPPORTED`, with no partial output.
+- NCPDP Telecom, one transaction per message in 0.1.1: with `@cosyte/ncpdp` 0.1.x a message whose
+  header declares more than one transaction throws the parser's multi-transaction build error (not a
+  `DeidError`) and returns nothing; with an older `@cosyte/ncpdp`, which the `>=0.0.0` peer range
+  still allows, only the first transaction is returned with the header count unchanged. Install
+  `@cosyte/ncpdp` 0.1.x or later and split a multi-transaction message before you de-identify it.
+- DICOM is metadata-only. When `burnedInAnnotationHazard` is `true`, do not release the image on
+  metadata alone. The DICOM pass is always the full PS3.15 Basic Profile; `policy` selects the label,
+  and `context` is not used. Replacement UIDs agree only within one call unless you pass a shared
+  `uidMap`. The residuals listed by cosyte-dicom for `@cosyte/dicom`'s `deidentify` apply here too.
+- Known defect in 0.1.1: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
+  value under the safe-harbor policy (longer with a longer custom policy name), while `LO` allows 64,
+  so every output carries `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings` and a non-conformant
+  attribute. `DicomDeidOptions` has no option to change it. A receiver that enforces the VR may reject
+  the attribute or the file: check with your receiver. The coded `(0012,0064)` still names the profile.
+- Date shift and keyed surrogates are not Safe Harbor: a policy labelled `safe-harbor` that uses them
+  is refused with `DEID_POLICY_INVALID`. `LIMITED_DATA_SET_PROFILE` is less protective than Safe
+  Harbor, is not a certified de-identification and is not on its own a §164.514(e) Limited Data Set
+  (that needs a Data Use Agreement, which is yours). A keyed transform without a key is a fatal
+  `DEID_NO_KEY`; there is no key store, and rotating the key breaks linkage on purpose.
+
+## PHI handling
+
+- The manifest is value-free: category, transform, locus, count, disposition, code,
+  `reidentificationCode` and an optional `partyRole`. Never a value, the key or the date-shift offset.
+  The locus is the one field built from the document; an identifier that does not fit its position's
+  shape is replaced by `WITHHELD_LOCUS_TOKEN` (`<withheld>`).
+- The type declarations state that a `DeidError` message never contains PHI (no value, key or
+  offset). Log `err.code`.
+- `DeidContext` and `DeidRegistry` expose no secret and redact themselves through `JSON.stringify` and
+  `String()`. Keep the key in a secret store, never in code or fixtures.
+- Treat output as sensitive until reviewed: unexamined positions and consumer-redacted free text can
+  still carry identifiers.
+- A `uidMap` you pass to the DICOM adapter fills with source UIDs; `@cosyte/dicom` says to treat
+  source UIDs as PHI.
+- Use synthetic data only in tests, fixtures, examples and prompts. Never paste real patient data
+  into a prompt, test, fixture or log, including to check what this library does with it.
+
+## Docs
+
+- https://docs.cosyte.com/deid/intro
+- https://www.npmjs.com/package/@cosyte/deid
+- https://github.com/cosyte/deid
+- https://github.com/cosyte/deid/blob/main/docs-content/limitations.md: the limitations document the
+  README asks you to read before relying on the library for anything that leaves your control.
+- [references/REFERENCE.md](references/REFERENCE.md): per-format coverage and residuals, adapter
+  recipes, keyed transforms and the registry, profiles, the BYO redactor, the Expert Determination
+  report, and the fatal and disposition code tables.

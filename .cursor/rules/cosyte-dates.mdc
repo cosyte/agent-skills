@@ -1,0 +1,142 @@
+---
+description: "Validates and converts the date parts that the @cosyte parsers return, with @cosyte/dates, without inventing precision or a timezone. Use when the user needs to turn an HL7 v2, X12, FHIR, C-CDA, NCPDP, ASTM or DICOM date or timestamp from a @cosyte parser into an ISO 8601 string, a Temporal value or an absolute instant; to validate a year, month, day, hour, minute, second, fraction and offsetMinutes object; to find a value's precision (a year-only date of birth stays a year); or to place a local time with no offset into a stated IANA zone. Not for parsing free-form or vendor date text, two-digit years, date arithmetic or locale formatting. To parse the message itself use the parser skill for its format, such as cosyte-hl7 or cosyte-x12."
+alwaysApply: false
+---
+<!-- Generated from skills/cosyte-dates/SKILL.md by scripts/build-cursor-rules.mjs. Edit the skill, not this file. -->
+
+# @cosyte/dates
+
+Date and time utilities for the `@cosyte/*` healthcare parsers: precision-preserving conversion and
+validation that never guesses a timezone. The parsers hand back spec-native date parts rather than
+JavaScript `Date` objects; this package validates and converts those parts.
+
+## When to use it
+
+- "Convert this HL7 timestamp to ISO 8601 without losing precision."
+- "Turn the parsed date of birth into a `Temporal.PlainDate`."
+- "Is this date valid?", "February 29 in a non-leap year", "which component is wrong?"
+- "Get an absolute instant from a timestamp that has no offset, in `America/New_York`."
+- "What precision does this value have: year, day, minute?"
+
+Use another skill when:
+
+- You need to parse the message that carries the date: use the format's skill (cosyte-hl7,
+  cosyte-x12, cosyte-fhir, cosyte-ccda, cosyte-ncpdp, cosyte-astm, cosyte-dicom). Several parsers
+  also export their own `toObject`, `toISO` and `toDate` for their date types; the format skill
+  covers those.
+
+## Install
+
+```bash
+npm install @cosyte/dates
+```
+
+The README leads with `pnpm add @cosyte/dates`. Node 22.0.0 or later. ESM only: there is no
+CommonJS build, so `require()` will not load it. One runtime dependency, `temporal-polyfill`;
+`Temporal` is re-exported from this package, so use that export rather than installing a second copy.
+
+## Minimal example
+
+Adapted from the README usage block (no real data; the dates are invented).
+
+```ts
+import {
+  MissingZoneError,
+  precisionOf,
+  toISO,
+  toInstant,
+  toTemporal,
+  validateParts,
+} from "@cosyte/dates";
+
+// A date of birth that arrived as a year and nothing more. It stays a year.
+const birthYear = { year: 1988 };
+console.log(toISO(birthYear), "| precision:", precisionOf(birthYear));
+
+// A calendar date. No midnight is invented and no zone is attached.
+const admitted = { year: 1988, month: 5, day: 7 };
+console.log(toISO(admitted), "| Temporal:", toTemporal(admitted).constructor.name);
+
+// A timestamp whose sender stated its offset. The offset is kept exactly.
+const collected = { year: 1988, month: 5, day: 7, hour: 13, minute: 45, offsetMinutes: 330 };
+console.log(toISO(collected), "->", toInstant(collected).toString());
+
+// The same timestamp with no offset. Nothing guesses one.
+const unknownZone = { year: 1988, month: 5, day: 7, hour: 13, minute: 45 };
+try {
+  toInstant(unknownZone);
+} catch (error) {
+  if (error instanceof MissingZoneError) console.log(error.name);
+}
+
+// Supplying the zone is the caller's decision.
+console.log(toInstant(unknownZone, { timeZone: "America/New_York" }).toString());
+
+// A date that does not exist is refused, and says which rule it broke.
+const result = validateParts({ year: 2025, month: 2, day: 29 });
+console.log(result.valid ? "valid" : result.issues[0]?.message);
+```
+
+The README shows these lines for the year, date, offset, missing-zone and invalid-date cases,
+identical under every host `TZ` (the zoned line in this snippet is our addition and is not in the
+README output):
+
+```text
+1988 | precision: year
+1988-05-07 | Temporal: PlainDate
+1988-05-07T13:45+05:30 -> 1988-05-07T08:15:00Z
+MissingZoneError
+day 29 does not exist: February 2025 has 28 days, because 2025 is not a leap year in the proleptic Gregorian calendar
+```
+
+## Key API
+
+- `validateParts(value)`: checks a value against the parts contract. Never throws; returns every
+  fault (`{ valid, issues }`).
+- `isValidParts(value)`: the same check as a type guard. `assertValidParts(value)`: returns the
+  parts or throws `DatePartsError`.
+- `precisionOf(value)`: the least significant present component, `'year'` through `'fraction'`.
+- `toISO(value)`: ISO 8601 at the value's own precision (`1988`, `1988-05`, `1988-05-07T13:45+05:30`).
+- `toTemporal(value)`: the narrowest Temporal type that carries what the value states
+  (`PlainYearMonth`, `PlainDate`, `PlainDateTime`, or `ZonedDateTime` when it has an offset).
+- `toZonedDateTime(value, options?)` and `toInstant(value, options?)`: need a time of day and a
+  zone. `options` is `{ timeZone?: string; offsetMinutes?: number }` and applies only when the value
+  has no `offsetMinutes` of its own.
+- `Temporal`: the re-exported Temporal implementation.
+- Errors: `DatePartsError` (carries `issues`), `MissingZoneError`, `PrecisionError`,
+  `AmbiguousLocalTimeError` (a local time that does not exist or exists twice in the named zone).
+
+## Limits and known defects
+
+From the README, deliberately not handled:
+
+- No parsing of vendor date text: input is the parts object a `@cosyte/*` parser already produced.
+- No two-digit years, ever, and no century window.
+- No arithmetic, comparison or formatting helpers: convert with `toTemporal()` and use Temporal.
+- No locale-aware output: `toISO()` renders ISO 8601 only.
+- Years 1000 to 9999 only, proleptic Gregorian calendar, no leap seconds.
+- `fraction` is whole nanoseconds; finer detail is refused with `finer-than-nanosecond`, not rounded.
+- Zone abbreviations such as `CST` are not accepted: pass an IANA identifier or a numeric offset.
+- `toTemporal()` throws for a year-only value, because Temporal has no year-only type.
+- `month` is 1 to 12 (spec-native), not JavaScript's 0 to 11.
+- An absent `offsetMinutes` means unknown. It does not mean UTC and it does not mean the host zone.
+  Do not "fix" a `MissingZoneError` by assuming UTC; ask where the data came from.
+
+We have no known defects on record for this package.
+
+## PHI handling
+
+From the README: a date of birth is PHI. The package writes nothing anywhere (no logging, telemetry,
+files or network, nothing to stdout or stderr), retains nothing between calls, and refuses rather
+than guesses. Its diagnostics quote one component and that component's value, never the whole date.
+Whether to log an error message that may contain one component of a patient's date of birth is your
+decision: prefer logging the issue code.
+
+Use invented dates in tests and examples. Never paste real patient data into prompts, fixtures or
+logs.
+
+## Docs
+
+- Documentation: https://docs.cosyte.com/dates/intro
+- npm: https://www.npmjs.com/package/@cosyte/dates
+- Source: https://github.com/cosyte/dates

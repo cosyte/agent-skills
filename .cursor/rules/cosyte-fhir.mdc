@@ -1,0 +1,153 @@
+---
+description: "Read, validate and write FHIR R4 resources in TypeScript with @cosyte/fhir. Use when a developer wants to parse FHIR JSON or XML (Patient, Observation, Condition, AllergyIntolerance, MedicationRequest, Bundle), keep decimal precision such as 0.010 or 120.0 exactly, validate a resource against R4 rules or StructureDefinition profiles they supply (for example US Core), render an OperationOutcome, check status, negation, entered-in-error and modifierExtension before summarizing a resource, read Observation value[x] with its UCUM code, resolve references in a Bundle, or stream a Bulk Data .ndjson export. For C-CDA XML documents use cosyte-ccda; for code system lookups, ValueSet expansion, ConceptMap translation or UCUM unit checks use cosyte-terminology; for HL7 v2 to FHIR conversion use cosyte-transform."
+alwaysApply: false
+---
+<!-- Generated from skills/cosyte-fhir/SKILL.md by scripts/build-cursor-rules.mjs. Edit the skill, not this file. -->
+
+# @cosyte/fhir
+
+FHIR R4 for Node.js and TypeScript: a resource model that keeps every value exactly as written, JSON
+and XML codecs, layered validation, and a safety readout for status and negation. A `decimal` keeps
+its exact text and never passes through a JavaScript number.
+
+## When to use it
+
+- "Parse this FHIR resource", "read this Patient JSON", "load this FHIR XML", keeping `0.010`,
+  `120.0` or a large `integer64` exactly as written.
+- Validate a resource (structure, R4 constraints, your profiles) and return an `OperationOutcome`.
+- Before summarizing or displaying a resource, check status, `refuted`, `entered-in-error`,
+  `not-done`, `doNotPerform` and any `modifierExtension`.
+- Read `Observation.value[x]` by its actual type and compare units on the UCUM `code`.
+- Tell a transaction Bundle from a batch, resolve references, stream a Bulk Data NDJSON export.
+
+Use another skill when:
+
+- The input is a C-CDA or CDA R2 XML document: `cosyte-ccda`.
+- You need code-system content, ValueSet `$expand`, ConceptMap `$translate`, UCUM equivalence or
+  RxNorm: `cosyte-terminology`.
+- You are converting HL7 v2 messages to FHIR: `cosyte-transform` (v2 parsing itself: `cosyte-hl7`).
+- You need de-identification: `cosyte-deid`. Synthetic fixtures: `cosyte-synth`.
+
+## Install
+
+```bash
+pnpm add @cosyte/fhir
+```
+
+`npm install @cosyte/fhir` and `yarn add @cosyte/fhir` also work. Node `>=22.0.0`. Dual ESM and
+CommonJS builds with type declarations for both. Zero runtime dependencies, no Node built-in imported.
+Everything ships from one entry point; there are no subpath imports.
+
+## Minimal example
+
+The document is the README's synthetic Observation; every value in it is fabricated.
+
+```ts
+import { assertSafeToSummarize, FhirSafetyError, isList, parseResource } from "@cosyte/fhir";
+import { readObservationValue, resolvePath, validateResource, type FhirNode } from "@cosyte/fhir";
+
+const document = `{
+  "resourceType": "Observation",
+  "id": "syn-0001",
+  "status": "final",
+  "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },
+  "subject": { "reference": "Patient/syn-0001" },
+  "effectiveDateTime": "2026-01-05",
+  "valueQuantity": {
+    "value": 120.0,
+    "unit": "mmHg",
+    "system": "http://unitsofmeasure.org",
+    "code": "mm[Hg]"
+  }
+}`;
+
+const { resource, issues } = parseResource(document);
+console.log(issues.map((issue) => issue.code)); // the 120.0 was kept exactly, and says so
+
+// Refuse rather than summarize something that cannot be summarized honestly.
+try {
+  assertSafeToSummarize(resource);
+} catch (err) {
+  if (err instanceof FhirSafetyError) console.error("not safe to summarize at", err.locations);
+  else throw err;
+}
+
+// Branch on the value[x] type before touching a magnitude, and compare on the UCUM code.
+const reading = readObservationValue(resource);
+if (reading?.type === "Quantity") {
+  console.log(reading.quantity?.value?.raw, reading.quantity?.code);
+}
+
+// resolvePath returns a repeating last segment as one list node: flatten it yourself.
+const codings = resolvePath(resource, "code.coding").flatMap((node): readonly FhirNode[] =>
+  isList(node) ? node.items : [node],
+);
+console.log(codings.map((node) => node.kind));
+
+const result = validateResource(resource);
+console.log(result.valid, result.issues.filter((issue) => issue.severity === "error").length);
+```
+
+Expected output. Most lines are values the README asserts; the rest follow from the type
+declarations. We have not run this exact snippet.
+
+```text
+[ 'DECIMAL_PRECISION_AT_RISK' ]
+120.0 mm[Hg]
+[ 'complex' ]
+true 0
+```
+
+## Key API
+
+- `parseResource` / `serializeResource` (JSON), `parseResourceXml` / `serializeResourceXml` (XML);
+  readers return `{ resource, issues }`. `nodesEquivalent` compares JSON-read and XML-read models.
+- `FhirDecimal`, `FhirInteger64`, `decimal()`, `integer64()`: exact-text numbers.
+- `validateResource(resource, options?)`: `{ valid, issues, toOperationOutcome() }`, with `profiles`
+  from `loadStructureDefinition` or `defineProfile` and an optional `terminology` service.
+- `readSafety(resource)` (status, `negations`, `safeToSummarize`) and `assertSafeToSummarize`
+  (throws `FhirSafetyError` with `locations` only).
+- `readObservationValue`, `readQuantity`, `readMedicationDoses`; `readBundle`, `buildBundleIndex`,
+  `resolveReference`; `streamNdjson`, `parseNdjsonLine`.
+- Model helpers `getProperty`, `getAllProperties`, `isList`, `resolvePath`; errors `FhirCodecError`,
+  `FhirXmlError`, `FhirSerializeError`, `InvalidProfileError`.
+
+## Limits and known defects
+
+- **`resolvePath` does not flatten a repeating last segment.** It flattens repeating elements it
+  walks through, but when the final segment repeats it returns the list node itself
+  (`kind: "list"`, members on `.items`), despite its JSDoc. On a Patient with two names, `name` and
+  `name.given` return list nodes while `name.family` returns two values. Flatten with `isList` as in
+  the example. `pathExists` is unaffected.
+- FHIR R4 (`4.0.1`) only. R5 and DSTU2 can be read but are not validated against their own
+  definitions. No typed per-resource models; R4's own constraints run on eight modeled types.
+- No bundled terminology or US Core content: pass your own `profiles` and `terminology` service.
+- `type` and `profile` slicing discriminators and reslicing are not checked
+  (`PROFILE_SLICE_UNCHECKED`); FHIRPath outside the supported subset is `INVARIANT_UNCHECKED`. Never
+  report either as a pass. `valid` ignores warnings, so read `issues` too.
+- No spec-clean JSON from a model read out of XML, no unit conversion, and a transaction Bundle is
+  read, never executed.
+- `readSafety` fields such as `status` and `retracted` describe the root resource only; branch on
+  `negations`, which covers `contained` resources and Bundle entries.
+- Upgrading from 0.0.10 changes verdicts: R4 constraints now run with no profile supplied.
+
+## PHI handling
+
+The README says to treat every document you hand this library as PHI.
+
+- It works in memory only: no socket, no disk, no fetch, no terminology call unless you pass one in.
+- Diagnostics carry no values: an issue is a code and a FHIRPath location, though a location can
+  repeat an element name from the document. `FhirXmlError` and `FhirCodecError` carry a code and an
+  offset or location, never input text; NDJSON failures report the line number, never its content.
+- You own transport, storage, retention, access control, audit logging and every log line your code
+  writes. Log issue codes and locations, never the resource or its values.
+- Use synthetic resources in tests and examples. Never paste real patient data into prompts,
+  fixtures or logs.
+
+## Docs
+
+- https://docs.cosyte.com/fhir/intro
+- https://www.npmjs.com/package/@cosyte/fhir
+- https://github.com/cosyte/fhir
+- [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-fhir/references/REFERENCE.md): API map by task, the model, issue and error
+  code lists, profiles, the safety readout, Bundles and NDJSON, with short recipes.

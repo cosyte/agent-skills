@@ -1,0 +1,48 @@
+{
+  "registry": "https://registry.npmjs.org",
+  "fetched": "2026-11-07",
+  "packages": {
+    "@cosyte/astm": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/ccda": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/cli": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/dates": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/deid": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/dicom": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/fhir": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/hl7": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/mllp": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/ncpdp": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/synth": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/terminology": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/transform": {
+      "latest": "0.1.1"
+    },
+    "@cosyte/x12": {
+      "latest": "0.1.2"
+    }
+  }
+}

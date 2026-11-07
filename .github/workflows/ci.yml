@@ -1,0 +1,41 @@
+name: CI
+
+# One job. `scripts/check.mjs` has no dependencies, so there is nothing to install.
+# The first step checks against the committed npm snapshot and never touches the network;
+# the second asks the npm registry, so a package that disappears or a new release shows up.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Monday 06:17 UTC, so a new package release is noticed without a commit.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Check skills, rules and prose (snapshot)
+        run: node scripts/check.mjs
+
+      - name: Check every named package on the npm registry (live)
+        run: node scripts/check.mjs --live

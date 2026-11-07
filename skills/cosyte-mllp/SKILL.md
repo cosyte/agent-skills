@@ -1,0 +1,223 @@
+---
+name: cosyte-mllp
+description: "Send and receive HL7 v2 messages over MLLP in Node.js with @cosyte/mllp: an MLLP client and server with VT, FS and CR framing, acknowledgement correlation (MSH-10 echoed in MSA-2), auto-reconnect with backoff, backpressure, a drain on close, and MLLPS over TLS including mutual TLS for IHE ATNA ITI-19. Use when a developer says build an HL7 listener, receive HL7 over TCP, send an ADT to an interface engine, return an AA, AE or AR acknowledgement, decide when to ACK, frame or unframe MLLP bytes, test an MLLP integration without opening a socket, or turn on TLS for an HL7 interface. The server answers AA only after your handler commits. For parsing message fields use cosyte-hl7; for converting to FHIR use cosyte-transform; for synthetic test messages use cosyte-synth."
+license: MIT
+metadata:
+  package: "@cosyte/mllp"
+  version: "0.1.1"
+  docs: "https://docs.cosyte.com/mllp/intro"
+---
+
+# @cosyte/mllp
+
+HL7 v2 over MLLP for Node.js: client, server, framing codec, acknowledgement correlation and
+reconnects, as a library with zero runtime dependencies and an in-memory transport for tests. It
+is the transport-only sibling of `@cosyte/hl7`, built around one guarantee: a positive
+acknowledgement cannot precede a durable commit.
+
+## When to use it
+
+- "Build an HL7 listener", "receive HL7 v2 over TCP", "stand up an MLLP server".
+- "Send this ADT/ORU to the interface engine and wait for the ACK".
+- Deciding when to answer `AA`, `AE` or `AR`, and what a failed commit should return.
+- Framing or unframing MLLP bytes (`VT + payload + FS + CR`) without a socket.
+- Reconnects, timeouts, backpressure and a clean shutdown that says which sends are safe to retry.
+- MLLPS: TLS with certificate verification, mutual TLS (IHE ATNA ITI-19).
+- Socket-free tests of an MLLP integration; a parity check against your own engine endpoint.
+
+Use another skill when:
+
+- parsing or reading fields of the message (PID, OBX, MSH-9): `cosyte-hl7`;
+- converting the received message to FHIR: `cosyte-transform`;
+- generating synthetic HL7 test traffic: `cosyte-synth`; the `cosyte` CLI: `cosyte-cli`.
+
+## Install
+
+```bash
+npm install @cosyte/mllp
+# the README's form
+pnpm add @cosyte/mllp
+
+# optional peer, needed only for the ack-from-hl7 subpath
+pnpm add @cosyte/hl7
+```
+
+`engines.node` is `>=22.0.0` (CI runs 22 and 24). Published dual ESM and CommonJS, each with its
+own type declarations. Zero runtime dependencies. Three code subpaths: `@cosyte/mllp`,
+`@cosyte/mllp/testing` and `@cosyte/mllp/ack-from-hl7`. The payload API is Buffer-first: messages
+are raw bytes and charset decoding is yours.
+
+## Minimal example
+
+The README's round trip, wrapped in a function. The server auto-acknowledges after the handler.
+
+```ts
+import { createStarterClient, createStarterServer } from "@cosyte/mllp";
+
+async function main(): Promise<void> {
+  const committed: Buffer[] = [];
+
+  // Port 0: the OS picks a free port. The host defaults to loopback, 127.0.0.1.
+  const server = await createStarterServer({
+    port: 0,
+    onMessage: async (payload) => {
+      committed.push(payload); // your durable commit: a throw here answers AE, never AA
+    },
+  });
+
+  const client = await createStarterClient({ host: "127.0.0.1", port: server.getStats().port ?? 0 });
+
+  const ack = await client.send(
+    Buffer.from(
+      "MSH|^~\\&|SENDING_APP|SENDING_FAC|RECEIVING_APP|RECEIVING_FAC|20260101120000||ADT^A01|CTRL0001|P|2.5.1\r",
+    ),
+  );
+
+  // Log the shape of the acknowledgement, never its field values.
+  const msa = ack
+    .toString("utf8")
+    .split("\r")
+    .find((segment) => segment.startsWith("MSA|"))
+    ?.split("|");
+  console.log("acknowledgement code:", msa?.[1]);
+  console.log("MSA-2 echoes the control id sent:", msa?.[2] === "CTRL0001");
+  console.log("messages committed:", committed.length);
+
+  await client.close();
+  await server.close();
+}
+
+void main();
+```
+
+```text
+acknowledgement code: AA
+MSA-2 echoes the control id sent: true
+messages committed: 1
+```
+
+### The commit contract: when to ACK
+
+An `AA` tells the sender "you may forget this message, I have it", so never send one before the
+message is durably handled. Follow these rules:
+
+- Pair `autoAck: "AA"` with an `onMessage` handler that commits durably. The server awaits the
+  handler and only then acknowledges. `createStarterServer` sets `autoAck: "AA"` for you;
+  `createServer` does not, and without `autoAck` your handler owns the response (manual mode:
+  build the ACK and send it with `conn.send(encodeFrame(ackPayload))`).
+- Resolve the handler only after the commit is durable. Resolve gives `AA`; any throw gives `AE`
+  (a resend may succeed); throw `MllpAckError` with `{ ackCode: "AR" }` for `AR` (do not resend
+  unchanged). The error message never reaches the wire.
+- Even after a successful commit the server downgrades to `AE` and emits `nack` when the inbound
+  cannot carry a correlatable positive ACK: no readable MSH, an empty MSH-10, a batch or
+  concatenated payload, or trailing bytes the framer discarded. A resend may follow.
+- `autoAck: "AA"` with no handler is a transport accept ("received and framed", not "processed").
+  Do not use it for clinical messages.
+- With `autoAck` set, do not call `conn.send()` in `onMessage`: that sends two ACKs.
+- To own MSA-1 (for example enhanced-mode `CA`, `CE`, `CR`), pass a function as `autoAck`. Then
+  `onMessage` is observation only: it runs first and its result does not gate the ACK.
+- MLLP plus an ACK is at-least-once at best. De-duplicate on MSH-10 plus MSH-7.
+
+```ts
+import { parseHL7 } from "@cosyte/hl7";
+import { createStarterServer, MllpAckError, type NackEvent } from "@cosyte/mllp";
+
+const store: Buffer[] = []; // stand-in for your durable store
+
+async function main(): Promise<void> {
+  const server = await createStarterServer({
+    port: 2575,
+    onMessage: async (payload) => {
+      const msg = parseHL7(payload); // a fatal parse error is a throw, so the answer is AE
+      if (msg.meta.messageCode !== "ADT") {
+        throw new MllpAckError("unsupported message type", { ackCode: "AR" });
+      }
+      store.push(payload); // resolve only once this write is durable
+    },
+  });
+
+  server.on("nack", (event: NackEvent) => {
+    // PHI-free by construction: connection id, the code sent, a static reason.
+    console.log("negative ack", event.ackCode, event.reason);
+  });
+}
+
+void main();
+```
+
+### Transport security (MLLPS)
+
+TLS is built on `node:tls`: no bundled TLS and no extra dependency. Certificate verification is on
+by default, the server binds `127.0.0.1` by default, and binding all interfaces needs an explicit
+`allowWildcardBind: true`. Server mutual TLS is `tls: { cert, key, ca, clientAuth: "MUST" }`
+(IHE ATNA ITI-19); a client verifies the peer with `tls: { ca }` and presents its own `cert` and
+`key`. A plain MLLP connection is cleartext: turn TLS on and supply the material yourself. The TLS
+guide (https://github.com/cosyte/mllp/blob/main/docs-content/tls.md) has the `ClientAuth` table,
+the TLS 1.2 floor, the typed failure modes (`tls-verify` against `tls-handshake`) and the
+bind-safety details. A full example is in `references/REFERENCE.md`.
+
+## Key API
+
+- `createStarterServer(opts)`: listening server, `autoAck: "AA"` by default, host `127.0.0.1`.
+  `createServer(opts?)` plus `server.listen(port, host?)` for full control (set `autoAck` yourself).
+- `createStarterClient({ host, port })`: an already-connected client. `createClient(opts)` plus
+  `client.connect()` for full control. `client.send(payload)` resolves with the ACK `Buffer`.
+- `close({ drainTimeoutMs })` drains in-flight sends; `Symbol.asyncDispose` on every closeable;
+  `AbortSignal` on every awaitable; `getStats()` returns JSON-serialisable counters.
+- Server event `nack` (`NackEvent`: `connectionId`, `ackCode`, `reason`); connections emit
+  `stateChange` across `CONNECTING`, `CONNECTED`, `DRAINING`, `RECONNECTING`, `DISCONNECTED`,
+  `CLOSED`.
+- `encodeFrame(payload)`, `FrameReader`: framing without a socket, 11 stable warning codes.
+- `buildRawAck(payload, code)`: parser-free ACK from raw bytes, downgrading a positive code it
+  cannot correlate. `MllpAckError`: throw from a handler to choose `AR`.
+- Send outcomes: `MllpNeverDeliveredError` (never written, safe to resend) against
+  `MllpUnknownFateError` (the peer may hold it, do not blindly resend), plus `MllpTimeoutError`,
+  `MllpBackpressureError`, `MllpConnectionError` and others listed in the reference.
+- `@cosyte/mllp/testing`: `InMemoryTransport.pair()`, a socket-free test double.
+- `@cosyte/mllp/ack-from-hl7`: `buildMllpAck(inbound, { code })`, `detectMode(inbound)`.
+- `runDifferential(options?)`: frame-parity and MSA-2 correlation report against your endpoint.
+
+## Limits and known defects
+
+- No batch acknowledgement: an `FHS`/`BHS` envelope or a frame with more than one MSH gets a
+  warned, non-positive `AE`. Send one message per frame.
+- MLLP Release 2 is not spoken and no option selects it.
+- No queue, replay store or write-ahead log for unacknowledged messages, no clinical acceptance
+  decision, and no PKI. Persist and retry in your application.
+- Engine coverage is a growing list: differential tests run against Mirth Connect and the Google
+  Cloud Healthcare MLLP adapter only. Epic and Cerner are not in that harness and we make no claim
+  about them; run `runDifferential` against your own test endpoint.
+- The transport does not parse HL7. Use `cosyte-hl7` (or the `ack-from-hl7` subpath) for that.
+- Read the known limitations page before you depend on it:
+  https://github.com/cosyte/mllp/blob/main/docs-content/limitations.md
+- Known defects: none on our list for 0.1.1.
+
+## PHI handling
+
+- It moves your buffer to the peer and the peer's bytes to your handler, holding a message only
+  while it is in flight. The receive decoder reuses its internal buffer without zeroing it: buffer
+  reuse, not a scrub.
+- Outside `ack-from-hl7` it reads only the MSH header fields an ACK needs (MSH-3 to MSH-6, MSH-10,
+  delimiters, processing id, version, MSH-15 and MSH-16) and the MSA of an inbound ACK, each
+  bounded at that segment's terminator. PID and later segments are never read or echoed.
+- `@cosyte/mllp/ack-from-hl7` is the opt-in exception: `buildMllpAck` and `detectMode` decode the
+  whole message, PID included, through the `@cosyte/hl7` peer. Leave that subpath out if your
+  data-flow boundary requires later segments never to be materialised as text.
+- No disk writes, no logger, no `console` calls. Errors, warnings, events and stats carry shape,
+  not content: a framing error holds at most one byte plus its offset. `MLLP_MISSING_LEADING_VT`
+  and `MLLP_FS_WITHOUT_CR` messages render one byte's hex, which can be the first content byte;
+  log `code` and `byteOffset` instead of `message` if that matters to you.
+- You own encryption in transit, logging and retention (a logged payload, ACK body or control id
+  is yours to protect), idempotency and network exposure.
+- Use synthetic data in tests and examples. Never paste real patient data into prompts, fixtures
+  or logs.
+
+## Docs
+
+- https://docs.cosyte.com/mllp/intro
+- https://www.npmjs.com/package/@cosyte/mllp
+- https://github.com/cosyte/mllp
+- Full reference in the repository: https://github.com/cosyte/mllp/tree/main/docs-content
+- [references/REFERENCE.md](references/REFERENCE.md): framing without a socket, the MLLPS
+  example, server ACK modes, client defaults and send-outcome errors, `ack-from-hl7`, the test
+  transport, and the warning code list.

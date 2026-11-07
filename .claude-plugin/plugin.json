@@ -1,0 +1,13 @@
+{
+  "name": "cosyte",
+  "displayName": "Cosyte",
+  "description": "Skills that teach Claude when and how to use the @cosyte packages for HL7 v2, MLLP, X12, FHIR, C-CDA, DICOM, NCPDP, ASTM, terminology, HL7 v2 to FHIR conversion, de-identification, synthetic fixtures, the cosyte CLI and dates.",
+  "author": {
+    "name": "Cosyte",
+    "url": "https://cosyte.com"
+  },
+  "homepage": "https://docs.cosyte.com/",
+  "repository": "https://github.com/cosyte/agent-skills",
+  "license": "MIT",
+  "keywords": ["healthcare", "hl7", "fhir", "x12", "dicom", "ccda", "ncpdp", "astm", "typescript"]
+}

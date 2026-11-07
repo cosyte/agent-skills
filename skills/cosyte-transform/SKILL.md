@@ -1,0 +1,161 @@
+---
+name: cosyte-transform
+description: "Convert parsed HL7 v2 messages to FHIR R4 with @cosyte/transform, grounded on the HL7 Version 2 to FHIR implementation guide. Use when a developer says convert this HL7 message to FHIR, map PID to Patient or PV1 to Encounter, turn an ORU^R01 OBX into Observation and DiagnosticReport, map ORM_O01 or OML_O21 orders to ServiceRequest and MedicationRequest, or convert VXU_V04, SIU_S12 or MDM_T02 to Immunization, Appointment or DocumentReference. toFhir returns a FHIR message Bundle plus value-free diagnostics. Also covers the six datatype converters (DTM, CX, CWE, XPN, XAD, NM to FHIR) and the narrow reverse path from a FHIR Patient or Observation to an HL7 v2 message with a PID or OBX. For parsing HL7 use cosyte-hl7; for FHIR resources on their own use cosyte-fhir; for code systems and ConceptMaps use cosyte-terminology."
+license: MIT
+metadata:
+  package: "@cosyte/transform"
+  version: "0.1.1"
+  docs: "https://docs.cosyte.com/transform/intro"
+---
+
+# @cosyte/transform
+
+HL7 v2 to FHIR R4 transformation for Node.js and TypeScript. It takes messages already parsed by
+`@cosyte/hl7`, produces `@cosyte/fhir` model nodes grounded on the official HL7 Version 2 to FHIR
+implementation guide (`hl7.fhir.uv.v2mappings`), and reports every ambiguity as a typed,
+value-free `TransformIssue` instead of guessing.
+
+## When to use it
+
+- "Convert this HL7 v2 message to FHIR", "map an ADT^A01 to Patient and Encounter".
+- ADT with NK1, AL1, DG1, PR1 and IN1 to RelatedPerson, AllergyIntolerance, Condition,
+  Procedure and Coverage.
+- ORU^R01 to DiagnosticReport, Observation and Specimen.
+- ORM_O01 or OML_O21 to ServiceRequest, RXO to MedicationRequest, TQ1 to a FHIR Timing.
+- VXU_V04 to Immunization, SIU_S12 to Appointment, MDM_T02 to DocumentReference.
+- Converting a single v2 datatype: DTM/TS, CX, CWE/CE, XPN, XAD, NM with units.
+- Rendering the diagnostics as a FHIR OperationOutcome.
+- Emitting a v2 message carrying a PID or OBX from a FHIR Patient or Observation (narrow, lossy).
+
+Use another skill when:
+
+- parsing or reading the HL7 message itself: `cosyte-hl7`;
+- reading, validating or serializing FHIR resources on their own: `cosyte-fhir`;
+- code systems, ConceptMaps, UCUM or RxNorm: `cosyte-terminology`;
+- receiving HL7 over a socket: `cosyte-mllp`; synthetic fixtures: `cosyte-synth`.
+
+## Install
+
+```bash
+npm install @cosyte/transform @cosyte/hl7 @cosyte/fhir
+```
+
+`@cosyte/hl7` and `@cosyte/fhir` are peer dependencies: install them beside it and parse with
+`@cosyte/hl7` before you transform. No third-party runtime dependencies. Node `>=22.0.0`. Dual ESM
+and CommonJS builds with type declarations for both.
+
+## Minimal example
+
+Transform a synthetic ADT^A01, log the issues, then read the PID fields the Patient does not carry
+(see the first limit below) straight from the parsed message.
+
+```ts
+import { serializeResource } from "@cosyte/fhir";
+import { parseHL7 } from "@cosyte/hl7";
+import { createNamingSystem, toFhir } from "@cosyte/transform";
+
+// A synthetic ADT^A01. Every name, identifier and date is invented.
+const raw =
+  "MSH|^~\\&|ADTAPP|MAIN|FHIRGW|REF|20260419101500||ADT^A01^ADT_A01|MSG00001|P|2.5\r" +
+  "EVN|A01|20260419101500\r" +
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^Q||19800115|M||2106-3^White^CDCREC|" +
+  "123 Main St^^Boston^MA^02101||||en^English^ISO639|||||||" +
+  "2186-5^Not Hispanic or Latino^CDCREC|||||||20260418|Y\r" +
+  "PV1|1|I|ICU^101^A^HOSP||||||||||||||||VISIT001\r";
+
+const msg = parseHL7(raw);
+
+const { bundle, issues } = toFhir(msg, {
+  // Seed every assigning authority you trust. A bare HD.1 never becomes a system on its own.
+  namingSystem: createNamingSystem({ authorities: { HOSP: "https://example.org/fhir/sid/mrn" } }),
+});
+
+console.log(serializeResource(bundle).length, "bytes of FHIR JSON");
+for (const i of issues) {
+  // Value-free: a stable code, the v2 location and the FHIR path. Safe to log.
+  console.log(i.severity, i.code, i.v2Location, i.fhirPath ?? "");
+}
+
+// toFhir drops these six PID fields from the Patient with no issue. Read them here.
+const p = msg.patient;
+const race = p?.race?.identifier; // PID-10
+const language = p?.language?.identifier; // PID-15
+const hasSsn = (msg.get("PID.19") ?? "") !== ""; // PID-19: check presence, do not copy it around
+const ethnicity = p?.ethnicity?.identifier; // PID-22
+const deathDateTime = msg.segments("PID")[0]?.field(29).asTs(); // PID-29, fidelity TS
+const deathIndicator = msg.get("PID.30"); // PID-30, "Y" means deceased
+const recordedDeceased = deathIndicator === "Y" || deathDateTime?.valid === true;
+console.log({ race, language, hasSsn, ethnicity, recordedDeceased });
+```
+
+This MSH-7 has no timezone, so the transform reduces it to date precision and raises
+`TRANSFORM_TIMESTAMP_NO_TIMEZONE` rather than assuming UTC. Pass
+`assumeTimezoneOffsetMinutes` only when you know the sender's offset.
+
+## Key API
+
+- `toFhir(msg, opts?)`: parsed `Hl7Message` in, `{ bundle, issues }` out; `bundle` is a FHIR R4
+  message Bundle (MessageHeader first, references resolve to `urn:uuid:` fullUrls). Options:
+  `namingSystem`, `assumeTimezoneOffsetMinutes`, `generateId` (deterministic fullUrls for tests).
+- `createNamingSystem({ authorities, codeSystems })`: assigning authority (HD) to
+  `Identifier.system`, v2 coding-system mnemonic to canonical URI. `DEFAULT_V2_CODE_SYSTEMS` is
+  the built-in seed.
+- Datatype converters returning `{ value, issues }`: `toFhirDateTime`, `toFhirIdentifier`,
+  `toFhirCodeableConcept`, `toFhirHumanName`, `toFhirAddress`, `toFhirQuantity`.
+- `toFhirCodeableConceptVia(cwe, map)` with IG value maps such as `ROUTE_VALUE_MAP`,
+  `SITE_VALUE_MAP`, `APPOINTMENT_TYPE_VALUE_MAP`, `SUBSTITUTION_VALUE_MAP`,
+  `ALLERGY_CATEGORY_VALUE_MAP`, `ALLERGY_TYPE_VALUE_MAP`, `ALLERGY_CRITICALITY_VALUE_MAP`.
+- `toOperationOutcome(issues)`: the issues as a FHIR OperationOutcome node.
+- `ISSUE_CODES`, `ISSUE_REGISTRY`, and the `TransformIssue` type (`code`, `severity`,
+  `v2Location`, `fhirPath`, `message`).
+- `toV2Patient(resource, trigger, options?)`, `toV2Observation(resource, trigger, options?)`:
+  FHIR to a v2 `ADT^<trigger>` with a PID or `ORU^<trigger>` with an OBX.
+- `IG_MAPPED_ADT_TRIGGERS`, `IG_MAPPED_ORU_TRIGGERS`, `IG_MAPPED_ORDER_TRIGGERS` and siblings:
+  triggers with an IG message map; others are segment-assembled and flagged.
+
+## Limits and known defects
+
+- Known defect, present in 0.1.1: the PID to Patient map carries only PID-3, 5, 7, 8 and 11.
+  PID-10 race, PID-15 language, PID-19 SSN, PID-22 ethnicity, PID-29 death date and PID-30 death
+  indicator are dropped with no issue (only PID-13 telecom raises one, at information severity).
+  Never treat a Patient with no `deceased[x]` as alive, and never treat an empty issues list as
+  proof nothing was dropped. Read those six fields from the parsed message with `@cosyte/hl7`, as
+  the example does, and carry them yourself.
+- "Validated" means a small internal required-element check, not FHIR conformance. None of the
+  IG's seven test messages yields a Bundle clean against FHIR R4 plus US Core 9.0.0; six of seven
+  are clean against base R4 (SIU_S12 breaks `app-3`). Validate against your own profiles. A clean
+  Bundle does not prove the right v2 field reached the right FHIR element.
+- No profiles and no terminology content ship. Fields whose IG target is SNOMED CT stay
+  structural unless you supply a ConceptMap; TXA-2 and RXA-5 are carried as-is.
+- No Practitioner, Location or Organization is built; those references are deferred with an
+  issue. `Coverage.status` is never asserted (read it as unknown, not active), `Coverage.payor` is
+  a display only, and `Procedure.status` is `unknown` unless the message determines it.
+- An unseeded assigning authority gives an identifier with no system plus
+  `TRANSFORM_IDENTIFIER_SYSTEM_UNRESOLVED`. A naked timestamp loses its time of day.
+- RXE has no IG map: flagged, never assembled. A TQ1 schedule is fully grounded or withheld.
+- Resources that fail the emit gate are withheld (`TRANSFORM_RESOURCE_INVALID`); with no
+  Patient, AL1, DG1, PR1 and IN1 resources are withheld too. Segments that reached nothing raise
+  `TRANSFORM_SEGMENT_NOT_EMITTED` or `TRANSFORM_SEGMENT_NO_IG_MAP`.
+- The FHIR to v2 path is narrow, lossy and not a round trip. The trigger is always yours
+  (`TRANSFORM_MISSING_TRIGGER` otherwise); many-to-one codes are refused
+  (`TRANSFORM_CODE_NOT_INVERTIBLE`). Any wider FHIR to v2 conversion is not implemented.
+- Check `issues` on every call and act on the codes; do not ship a Bundle unread.
+
+## PHI handling
+
+- Every `TransformIssue` is value-free: a stable code, a v2 location, a FHIR path and a static
+  message, never a field value. Issue messages are safe to log verbatim, and
+  `toOperationOutcome` reads only issue metadata.
+- An unclassifiable segment name is located as `[#4]` with no part of the name reproduced.
+- The Bundle and any v2 message from the reverse path are the converted patient data: protect
+  them like the source message.
+- Use synthetic data in tests and examples. Never paste real patient data into prompts, fixtures
+  or logs.
+
+## Docs
+
+- https://docs.cosyte.com/transform/intro
+- https://www.npmjs.com/package/@cosyte/transform
+- https://github.com/cosyte/transform
+- [references/REFERENCE.md](references/REFERENCE.md): the segment to resource map, per-family
+  notes and refusals, the reverse path, and the issue code list.

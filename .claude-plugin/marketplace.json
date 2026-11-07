@@ -1,0 +1,15 @@
+{
+  "name": "cosyte",
+  "description": "Agent Skills for Cosyte's MIT-licensed TypeScript libraries for healthcare data standards.",
+  "owner": {
+    "name": "Cosyte",
+    "url": "https://cosyte.com"
+  },
+  "plugins": [
+    {
+      "name": "cosyte",
+      "source": "./",
+      "description": "Skills that teach Claude when and how to use the @cosyte packages for HL7 v2, MLLP, X12, FHIR, C-CDA, DICOM, NCPDP, ASTM, terminology, HL7 v2 to FHIR conversion, de-identification, synthetic fixtures, the cosyte CLI and dates."
+    }
+  ]
+}

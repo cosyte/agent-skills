@@ -1,0 +1,148 @@
+---
+name: cosyte-astm
+description: "Parse, build and frame ASTM lab analyzer messages in TypeScript with @cosyte/astm: E1394 / CLSI LIS02-A2 records (H, P, O, R, C, Q, M, S, L) and E1381 / CLSI LIS01-A2 framing with modulo-256 checksums and a pure ENQ, ACK, NAK, EOT receiver state machine. Use when a developer asks to parse ASTM from a lab instrument or analyzer, read result values, units, abnormal flags or result status from R records, split a stream into messages, decode STX/ETX framed bytes from a serial line or TCP socket, tell framed from raw transport, map a vendor local test code to LOINC through their own LIVD catalog, or emit spec-clean ASTM records and frames. For HL7 v2 lab results (ORU) use cosyte-hl7, for code systems and UCUM use cosyte-terminology, and for synthetic ASTM fixtures use cosyte-synth."
+license: MIT
+metadata:
+  package: "@cosyte/astm"
+  version: "0.1.1"
+  docs: "https://docs.cosyte.com/astm/intro"
+---
+
+# @cosyte/astm
+
+ASTM parser, serializer and builder for Node.js and TypeScript: lenient on parse, spec-clean on
+emit. It reads the delimiters each `H` header declares, decodes escapes before it splits a value,
+keeps the practice- and laboratory-assigned patient IDs distinct, and reports every tolerated
+deviation as a stable, value-free warning instead of returning a value the bytes do not carry.
+
+## When to use it
+
+- "Parse this ASTM message from the analyzer", a `CR`-delimited record stream starting `H|\^&`.
+- Read a result's value, units, range, abnormal flag and status (final, correction, cancelled) from
+  `R` records, with patient and order context from `P` and `O`.
+- Split a stream holding several `H` to `L` messages so each patient keeps only its own results.
+- Decode framed bytes (`STX`, frame number, checksum, `ETX`/`ETB`) from a serial port or socket,
+  tell framed from raw TCP traffic, or drive the `ENQ`/`ACK`/`NAK`/`EOT` receiver side yourself.
+- Map an analyzer's local test code to LOINC with a LIVD catalog you supply.
+- Emit canonical records or framed bytes; read an ASTM timestamp without inventing a timezone.
+
+Use another skill when: results arrive as HL7 v2 or over MLLP (cosyte-hl7, cosyte-mllp); you need
+code systems or UCUM (cosyte-terminology); you need synthetic ASTM fixtures (cosyte-synth); you
+must de-identify data (cosyte-deid); you are unsure which package fits (cosyte).
+
+## Install
+
+```bash
+pnpm add @cosyte/astm
+# or
+npm install @cosyte/astm
+```
+
+Node.js `>=22.0.0`; nothing below it is supported. Dual ESM and CJS (`dist/index.mjs`,
+`dist/index.cjs`, each with its own declarations) from one entry point, `@cosyte/astm`. Zero
+runtime dependencies, and the package imports no Node built-in.
+
+## Minimal example
+
+From the README, where it runs on every test run. Every value is synthetic.
+
+```ts
+import { parseAstmRecords, patient, results } from "@cosyte/astm";
+
+// Synthetic ASTM records, CR-delimited. The header declares the delimiters.
+const stream =
+  "H|\\^&|||analyzer^1|||||||P|LIS02-A2|20240115103000\r" +
+  "P|1|PRACTICE-0001|LAB-0002|||||F\r" +
+  "O|1|SPEC-7|ACC-42|^^^687|||20240115102500\r" +
+  "R|1|^^^687|28.6|U/L|10-40|N||F\r" +
+  "L|1|N\r";
+
+const msg = parseAstmRecords(stream);
+const [first] = results(msg);
+
+console.log(first?.value, first?.units);
+console.log(first?.status.meaning, first?.status.isActiveFinal);
+console.log(first?.flag?.meaning);
+console.log(first?.universalTestId?.localCode);
+console.log(patient(msg)?.practiceAssignedId, patient(msg)?.laboratoryAssignedId);
+console.log(msg.warnings.length);
+```
+
+```text
+28.6 U/L
+final true
+normal
+687
+PRACTICE-0001 LAB-0002
+0
+```
+
+Values and units are raw, never converted or defaulted. `status.isActiveFinal` is `true` only for
+a plain `F`, so a correction (`C`) or cancellation (`X`) never reads as active final. An
+unrecognized flag reads `undefined`, never `normal`. Results key on the vendor local code in the
+Universal Test ID's fourth component.
+
+## Key API
+
+- `parseAstmRecords(raw, { strict?, profile? })`: de-framed string or `Uint8Array` to a frozen
+  `AstmMessage` (`header`, `records`, `delimiters`, `classification`, `warnings`).
+- `results`, `patient`, `orders`, `comments`, `query`: whole-stream readers that throw
+  `AstmAmbiguousStreamError` on several messages (and `patient` on several `P` in one message).
+- `messages(msg)`: one entry per message with its own `patient`, `results`, `orders`, `delimiters`.
+- `decodeAstmFrames(bytes)`, `parseFramedAstm(bytes)`: frames, checksums and reassembled records;
+  only checksum-verified frames reach the record parser.
+- `detectFraming(bytes)`: `"framed"` or `"raw"`. `ltpInitialState`, `ltpReduce`: pure receiver
+  state machine returning `sendAck`, `sendNak`, `sendEot`, `deliverRecord` actions.
+- `defineLivdCatalog`, `applyLivd`: advisory LOINC annotations from your catalog.
+- `buildAstmMessage`, `serializeAstmRecords`, `composeAstmFrames`, `serializeFramedAstm`: emit.
+- `parseAstmDate`, `toObject`, `toISO`, `toDate`: timestamps without an assumed zone.
+- `defineAstmProfile`, `astmProfiles`, `isSafetyCriticalCode`: vendor profiles behind a safety gate.
+- `AstmParseError`, `AstmStrictError`, `AstmFrameStrictError`, `AstmSerializeError`,
+  `AstmFrameEncodeError`; codes in `WARNING_CODES`, `FATAL_CODES`, `FRAME_WARNING_CODES`.
+
+## Limits and known defects
+
+We have no known defects on our list for this version. The README states these limits:
+
+- Use `messages()` for any stream that may carry several messages or patients.
+- Check for `ASTM_RECORD_UNKNOWN_TYPE` before trusting a split: an unrecognized header merges the
+  messages around it and that warning is the only report. Do not gate on the warning count. If
+  delimiter drift is a risk on your feed, parse with `{ strict: true }`.
+- Treat `ASTM_RECORD_FIELDS_UNSEPARATED` as a lost result. Its absence does not prove a record was
+  read in its own set: a foreign set whose field separator occurs in the line splits silently.
+- An escape character next to a delimiter can move a boundary. Several shapes raise codes no
+  profile may tolerate (`ASTM_RECORD_DELIMITER_SWALLOWED_BY_ESCAPE`,
+  `ASTM_RECORD_AMBIGUOUS_ESCAPE_ALIGNMENT`, `ASTM_RECORD_ALIGNMENT_*`), but some stay silent
+  (`28.6&S&\&S&U/L` reads `28.6^` with `warnings: []`). Read the raw line whenever an escape
+  character sits next to a delimiter.
+- A header naming one character in two roles raises `ASTM_RECORD_DELIMITER_ROLE_COLLISION`.
+- No named per-vendor profile ships, only `default` and `referenceCorpus`. A profile only
+  downgrades expected, non-safety-critical warnings and never alters a value.
+- No LOINC, SNOMED or LIVD data is bundled and no LOINC is validated or guessed. The catalog keys on
+  the vendor code alone, so scope it to your analyzers. Unit matching is verbatim, not UCUM.
+- Protocol timers and retransmit timing are yours. Never ACK a frame the codec did not vouch for.
+- Delimiter forward scoping, the Latin-1 encoding and the reserved-byte set are this package's
+  reading, not quotations of the paywalled standard; no citable source binds the status letters.
+- `toDate` returns `undefined` without `assumeOffsetMinutes`. Prefer `toISO` to
+  `astmDateToLocalISO`, which still renders impossible dates such as `"1988-13-01"`.
+- Frame emit refuses characters above `U+00FF` and raw `STX`, `ETB` or `ETX` bytes.
+
+## PHI handling
+
+- The library never logs, writes to disk, opens a network connection or retains data across calls.
+- Warnings and fatal errors raised on stream content carry a code and a position (record index,
+  type letter, field and component), never a field value: log those.
+- Three messages quote your own arguments back: an out-of-range `startFrameNumber`, and the
+  options and profile name given to `defineAstmProfile()`.
+- The parsed model holds patient data: `JSON.stringify(msg)` is not safe to log, and a raw line
+  preserved on a deviation is the patient's data. The library never redacts or de-identifies.
+- Use synthetic data (cosyte-synth) in tests and examples; never paste real patient data or real
+  analyzer captures into prompts, fixtures or logs.
+
+## Docs
+
+- https://docs.cosyte.com/astm/intro
+- https://www.npmjs.com/package/@cosyte/astm
+- https://github.com/cosyte/astm
+- [references/REFERENCE.md](references/REFERENCE.md): exports by task, recipes for multi-message
+  streams, framed bytes, the receiver reducer, LIVD, dates, emit and profiles, and code tables.
