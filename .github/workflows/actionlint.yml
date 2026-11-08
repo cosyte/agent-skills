@@ -5,8 +5,8 @@ name: actionlint
 #
 # A JOB OF ITS OWN, because the published workflows reference has no standalone actionlint
 # workflow: its actionlint job lives inside the shared library CI, which needs a pnpm package this
-# repository does not have. The two steps below are that job's steps at
-# `workflows-2026-11-07-498c7c13c886`, as examples carries them.
+# repository does not have. The steps below are that job's steps, release cache included, at
+# `workflows-2026-11-08-c0db8d8e5927`, as examples carries them.
 #
 # WHY A PINNED BINARY, and not reviewdog/action-actionlint: from v1.75.0 that action installs
 # actionlint from a fork (kjanat/actionlint) with a `curl | bash`, not from rhysd/actionlint. Here
@@ -42,17 +42,49 @@ jobs:
         with:
           persist-credentials: false
 
+      # THE RELEASE TARBALL IS CACHED, keyed on the version and the SHA-256, so a run that finds it
+      # never asks GitHub's release downloads, which answered 504 for hours on 2026-11-08. The cache
+      # is only where the bytes come from: the install step checks the SHA-256 of whatever it
+      # unpacks, cached or downloaded. A cache that cannot be reached is a miss, never a failure.
+      # These three steps are the shared actionlint job's, at the reference named above.
+      - name: Restore the actionlint release from the cache
+        id: actionlint-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/actionlint-cache
+          key: actionlint-${{ env.ACTIONLINT_VERSION }}-linux-amd64-${{ env.ACTIONLINT_SHA256 }}
+
       - name: Install actionlint at the pinned version and checksum
         shell: bash
         run: |
           set -euo pipefail
           tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/${tarball}" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
-          echo "${ACTIONLINT_SHA256}  ${RUNNER_TEMP}/${tarball}" | sha256sum -c -
-          tar -xzf "${RUNNER_TEMP}/${tarball}" -C "${RUNNER_TEMP}" actionlint
+          cache_dir="${RUNNER_TEMP}/actionlint-cache"
+          if [ -f "${cache_dir}/${tarball}" ] \
+            && echo "${ACTIONLINT_SHA256}  ${cache_dir}/${tarball}" | sha256sum -c --status -; then
+            echo "actionlint ${ACTIONLINT_VERSION}: the cached release matches the pinned SHA-256."
+          else
+            if [ -f "${cache_dir}/${tarball}" ]; then
+              echo "::warning::the cached actionlint release does not match the pinned SHA-256, so it is downloaded again"
+            fi
+            mkdir -p "${cache_dir}"
+            curl -fsSL --retry 5 --retry-connrefused --retry-max-time 120 --connect-timeout 20 \
+              -o "${cache_dir}/${tarball}" \
+              "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          fi
+          echo "${ACTIONLINT_SHA256}  ${cache_dir}/${tarball}" | sha256sum -c -
+          tar -xzf "${cache_dir}/${tarball}" -C "${RUNNER_TEMP}" actionlint
           "${RUNNER_TEMP}/actionlint" --version
           shellcheck --version
+
+      # Saved only on a miss, straight after the checked install, so a run whose lint fails still
+      # seeds the cache with a tarball whose SHA-256 was just checked.
+      - name: Save the actionlint release to the cache
+        if: ${{ steps.actionlint-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/actionlint-cache
+          key: ${{ steps.actionlint-cache.outputs.cache-primary-key }}
 
       - name: actionlint over .github/workflows/
         shell: bash

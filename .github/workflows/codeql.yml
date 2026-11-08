@@ -29,6 +29,6 @@ jobs:
       security-events: write # upload the SARIF to the Security tab
       contents: read # required to resolve the reusable workflow
       actions: read # read this run's workflow metadata, which the SARIF upload attaches
-    uses: cosyte/.github/.github/workflows/codeql.yml@workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/codeql.yml@workflows-2026-11-08-c0db8d8e5927
     with:
       languages: '["actions", "javascript-typescript"]'
