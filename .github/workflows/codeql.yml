@@ -1,0 +1,34 @@
+name: CodeQL
+
+# Static analysis through the shared CodeQL workflow, called the way examples calls it, at the
+# published reference every Cosyte repository uses. Two languages: `javascript-typescript` for the
+# scripts under scripts/, and `actions` for the workflows under .github/workflows/.
+#
+# No `timeout-minutes` here: a job that calls a reusable workflow cannot set one. The timeout
+# belongs to the shared job, and arrives when this caller moves to a reference that has it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Monday 03:47 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
+    - cron: "47 3 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    permissions:
+      security-events: write # upload the SARIF to the Security tab
+      contents: read # required to resolve the reusable workflow
+      actions: read # read this run's workflow metadata, which the SARIF upload attaches
+    uses: cosyte/.github/.github/workflows/codeql.yml@workflows-2026-11-07-498c7c13c886
+    with:
+      languages: '["actions", "javascript-typescript"]'
