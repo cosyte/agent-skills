@@ -1,0 +1,23 @@
+name: PR title
+
+# A thin caller of the shared Conventional Commits check (ST24): with squash merges the pull
+# request title becomes the commit on main, so the title is what gets checked. The check itself
+# lives once, in cosyte/.github, at the published workflows reference every Cosyte repo uses.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    permissions:
+      contents: read
+    uses: cosyte/.github/.github/workflows/pr-title.yml@workflows-2026-11-07-498c7c13c886
