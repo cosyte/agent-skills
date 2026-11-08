@@ -1,6 +1,6 @@
-# @cosyte/fhir reference (0.1.3)
+# @cosyte/fhir reference (0.1.4)
 
-Everything here comes from the published 0.1.3 README and type declarations. The package exports
+Everything here comes from the published 0.1.4 README and type declarations. The package exports
 roughly two hundred names from one entry point; this page groups the ones most tasks need. Check
 `node_modules/@cosyte/fhir/dist/index.d.ts` for the rest.
 
@@ -21,7 +21,7 @@ roughly two hundred names from one entry point; this page groups the ones most t
   compares quantity only, `toBigInt` is exact for integer values, `toNumber` is the explicit lossy
   escape. `FhirInteger64` keeps the full 64-bit range as text with a `toBigInt()` view.
 - `resolvePath(node, path)` and `pathExists(node, path)` walk dotted element paths with `[x]` choice
-  suffixes (no functions, no filters). In 0.1.3 a repeating last segment comes back as the list node,
+  suffixes (no functions, no filters). In 0.1.4 a repeating last segment comes back as the list node,
   not its items; flatten with `isList(node) ? node.items : [node]`.
 
 ## Read and write

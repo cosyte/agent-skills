@@ -4,7 +4,7 @@ description: "Parse DICOM Part 10 files (.dcm, DICOMDIR) in Node.js and TypeScri
 license: MIT
 metadata:
   package: "@cosyte/dicom"
-  version: "0.1.4"
+  version: "0.1.7"
   docs: "https://docs.cosyte.com/dicom/intro"
 ---
 
@@ -85,7 +85,11 @@ tolerated 1 DICOM_MISSING_PREAMBLE
 - `Dictionary.lookup`, `Dictionary.byKeyword` (keyword to tag), `Dictionary.uid` (UID registry name).
 - `readPixelDataFragments(ds)`: `{ basicOffsetTable, fragments }` as raw bytes, or `undefined` when
   Pixel Data is absent or native.
-- `serializeDicom(ds)`: Part 10 `Buffer` in the source transfer syntax (no transcode).
+- `serializeDicom(ds)`: Part 10 `Buffer` in the source transfer syntax (no transcode). A value over
+  65,534 bytes in a VR with a 16-bit length field is written as `UN`, as PS3.5 section 6.2.2
+  requires. A Private Creator `(gggg,0010-00FF)` or File Meta `(0002,xxxx)` element that long may
+  not be `UN`, so it is refused with `DicomSerializeError` code `VALUE_TOO_LONG_FOR_VR` and nothing is
+  written.
 - `deidentify(ds, options?)`: `{ dataset, report }`; options `retain` (values from
   `DEIDENTIFY_OPTIONS`), `uidRoot`, `uidMap`, `profile`, `deidentificationMethod`. The input is never
   mutated.
@@ -110,14 +114,14 @@ tolerated 1 DICOM_MISSING_PREAMBLE
 - Treat `DICOM_DUPLICATE_TAG_IN_DATA_SET` and `DICOM_DUPLICATE_FILE_META_ELEMENT` like a fatal: each
   reports a value the parsed object lost.
 - Coded values are surfaced, not validated against SNOMED, LOINC or other terminologies.
-- Known defect in 0.1.4: the Explicit VR parsers compare the on-wire VR only with the first VR the
+- Known defect in 0.1.7: the Explicit VR parsers compare the on-wire VR only with the first VR the
   dictionary lists, so a tag the standard allows two VRs, such as Pixel Data `(7FE0,0010)` written as
   `OW` (common in native images) or `(0028,0106)` written as `SS`, gets a false `DICOM_VR_MISMATCH`.
   Do not parse with `{ strict: true }` or `{ profile: profiles.strict }` (which escalates
   `DICOM_VR_MISMATCH`) on files that may carry such tags: the parse throws. In lenient mode, treat a
   `DICOM_VR_MISMATCH` on such a tag as possibly false; check the element's `vr` against
   `Dictionary.lookup(tag)?.vr`.
-- Known defect in 0.1.4: a warning escalated to a throw (by `{ strict: true }` or a profile's
+- Known defect in 0.1.7: a warning escalated to a throw (by `{ strict: true }` or a profile's
   `escalate` list) throws `DicomParseError` whose `code` is the warning code, such as
   `DICOM_VR_MISMATCH`, although the type declares `code` as one of the four `FATAL_CODES`. A `switch`
   over `FatalCode` misses it: test for the four fatal codes and treat any other `code` as an escalated

@@ -9,28 +9,28 @@
       "latest": "0.1.3"
     },
     "@cosyte/cli": {
-      "latest": "0.1.3"
+      "latest": "0.1.4"
     },
     "@cosyte/dates": {
       "latest": "0.1.3"
     },
     "@cosyte/deid": {
-      "latest": "0.1.3"
+      "latest": "0.1.4"
     },
     "@cosyte/dicom": {
-      "latest": "0.1.4"
+      "latest": "0.1.7"
     },
     "@cosyte/fhir": {
-      "latest": "0.1.3"
+      "latest": "0.1.4"
     },
     "@cosyte/hl7": {
-      "latest": "0.1.4"
+      "latest": "0.1.5"
     },
     "@cosyte/mllp": {
       "latest": "0.1.4"
     },
     "@cosyte/ncpdp": {
-      "latest": "0.1.3"
+      "latest": "0.1.4"
     },
     "@cosyte/synth": {
       "latest": "0.1.3"
@@ -42,7 +42,7 @@
       "latest": "0.1.4"
     },
     "@cosyte/x12": {
-      "latest": "0.1.4"
+      "latest": "0.1.7"
     }
   }
 }

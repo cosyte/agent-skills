@@ -1,6 +1,6 @@
 # @cosyte/dicom reference
 
-Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.4`. Every name below is exported
+Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.7`. Every name below is exported
 from the single entry point `@cosyte/dicom`. Facts come from the published README, the type
 declarations and the docs.cosyte.com/dicom pages the README links; where a page is longer, this file
 points to it rather than paraphrasing it.
@@ -209,7 +209,7 @@ What the output says about itself:
 `group0004Removals` and `group0004RemovalCount`, `unregisteredElementRemovals` and
 `unregisteredElementRemovalCount`, `uidMap`, `warnings`, `retained`.
 
-### Find root elements that 0.1.4 flags with a false DICOM_VR_MISMATCH
+### Find root elements that 0.1.7 flags with a false DICOM_VR_MISMATCH
 
 ```ts
 import { Dictionary, parseDicom } from "@cosyte/dicom";
@@ -229,7 +229,7 @@ export function multiVrElements(buf: Buffer): string[] {
 This covers the root Data Set only. `DicomParseWarning.position.byteOffset` inside a defined-length
 Sequence Item is relative to that Item, so it is not a lookup key against the root.
 
-## Known defects (0.1.4)
+## Known defects (0.1.7)
 
 The Explicit VR Little Endian and Big Endian parsers compare the on-wire VR only with the first VR of
 the dictionary entry. A tag the standard lets carry two VRs, such as Pixel Data `(7FE0,0010)` as `OB` or
@@ -310,7 +310,7 @@ as `DicomParseError` too, with the warning code in `code` (see Known defects).
 | Class | Codes |
 | --- | --- |
 | `DicomValueError` (`VALUE_ERROR_CODES`, from `image.frame(i)` only) | `FRAME_INDEX_OUT_OF_RANGE`, `MISSING_REQUIRED_FUNCTIONAL_GROUP` |
-| `DicomSerializeError` (`SERIALIZE_ERROR_CODES`) | `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED` |
+| `DicomSerializeError` (`SERIALIZE_ERROR_CODES`) | `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`, `VALUE_TOO_LONG_FOR_VR` (a Private Creator or File Meta value over 65,534 bytes in a VR with a 16-bit length field, which may not be written as `UN`; `deidentify()` throws it too when it re-encodes a Sequence Item that keeps such a Private Creator) |
 | `DeidentifyError` (`DEIDENTIFY_ERROR_CODES`) | `INVALID_OPTIONS` (unknown option, malformed UID root, both temporal options), `UNSUPPORTED_TRANSFER_SYNTAX` (JPIP Referenced) |
 | `ProfileDefinitionError` | thrown by `defineProfile()` for an invalid profile |
 

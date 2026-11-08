@@ -1,11 +1,11 @@
 # @cosyte/ncpdp reference
 
-Fuller API detail for the cosyte-ncpdp skill, version 0.1.3. Every name here is in the published
+Fuller API detail for the cosyte-ncpdp skill, version 0.1.4. Every name here is in the published
 type declarations; behavior statements come from the package README and its JSDoc.
 
-## Spot the transmission-level mis-split (known defect, present in 0.1.3)
+## Spot the transmission-level mis-split (known defect, present in 0.1.4)
 
-In 0.1.3 a Telecom request whose Patient and Insurance segments sit before the first group
+In 0.1.4 a Telecom request whose Patient and Insurance segments sit before the first group
 separator decodes that leading group as its own transaction. Find such groups before reading a
 claim view, then read the shared fields from the leading group and the claim fields from the rest.
 

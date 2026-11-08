@@ -4,7 +4,7 @@ description: "Read, validate and write FHIR R4 resources in TypeScript with @cos
 license: MIT
 metadata:
   package: "@cosyte/fhir"
-  version: "0.1.3"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/fhir/intro"
 ---
 
@@ -120,7 +120,7 @@ true 0
 
 - **`resolvePath` does not flatten a repeating last segment.** It flattens repeating elements it
   walks through, but when the final segment repeats it returns the list node itself
-  (`kind: "list"`, members on `.items`). This holds in 0.1.3, and its JSDoc now says so. On a
+  (`kind: "list"`, members on `.items`). This holds in 0.1.4, and its JSDoc now says so. On a
   Patient with two names, `name` and `name.given` return list nodes while `name.family` returns two
   values. Flatten with `isList` as in the example. `pathExists` is unaffected.
 - FHIR R4 (`4.0.1`) only. R5 and DSTU2 can be read but are not validated against their own

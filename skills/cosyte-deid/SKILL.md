@@ -4,7 +4,7 @@ description: "De-identify healthcare data in Node.js and TypeScript with @cosyte
 license: MIT
 metadata:
   package: "@cosyte/deid"
-  version: "0.1.3"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/deid/intro"
 ---
 
@@ -122,14 +122,14 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
   transaction is refused with a `DeidError` carrying `DEID_FORMAT_UNSUPPORTED` and the message
   `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE` (from `@cosyte/deid/ncpdp`), and returns no transformed
   message, no manifest and no partial output. Split such a message and de-identify each transaction on
-  its own. `@cosyte/ncpdp` 0.1.3 also decodes a request whose Patient or Insurance segments sit before
+  its own. `@cosyte/ncpdp` 0.1.4 also decodes a request whose Patient or Insurance segments sit before
   the first group separator as two transactions (a known defect there, see cosyte-ncpdp), so this
   adapter refuses that request the same way.
 - DICOM is metadata-only. When `burnedInAnnotationHazard` is `true`, do not release the image on
   metadata alone. The DICOM pass is always the full PS3.15 Basic Profile; `policy` selects the label,
   and `context` is not used. Replacement UIDs agree only within one call unless you pass a shared
   `uidMap`. The residuals listed by cosyte-dicom for `@cosyte/dicom`'s `deidentify` apply here too.
-- Known defect in 0.1.3: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
+- Known defect in 0.1.4: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
   value under the safe-harbor policy (longer with a longer custom policy name), while `LO` allows 64,
   so every output carries `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings` and a non-conformant
   attribute. `DicomDeidOptions` has no option to change it. A receiver that enforces the VR may reject
@@ -138,7 +138,12 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
   is refused with `DEID_POLICY_INVALID`. `LIMITED_DATA_SET_PROFILE` is less protective than Safe
   Harbor, is not a certified de-identification and is not on its own a §164.514(e) Limited Data Set
   (that needs a Data Use Agreement, which is yours). A keyed transform without a key is a fatal
-  `DEID_NO_KEY`; there is no key store, and rotating the key breaks linkage on purpose.
+  `DEID_NO_KEY`. `createDeidContext` and `createDeidRegistry` refuse a key, or an explicit
+  `dateShiftSeed`, shorter than 16 bytes with the fatal `DEID_KEY_TOO_SHORT`. The length is counted
+  on the bytes the HMAC uses: a `Uint8Array` as given, a string as its UTF-8 bytes (a hex or base64
+  string is not decoded). Use 32 random bytes, for example `crypto.randomBytes(32)`. There is no key
+  store, and a new key gives new surrogates and date-shift offsets: rotating the key breaks linkage
+  on purpose, and replacing a short key breaks it too.
 
 ## PHI handling
 
