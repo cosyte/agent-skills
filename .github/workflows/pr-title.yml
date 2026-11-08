@@ -9,9 +9,9 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, edited]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: a run cancelled by a newer push or title edit can report as a failed
+# required check and block the merge until someone re-runs it. Every run is short, so each is
+# left to finish and the newest result stands.
 
 permissions:
   contents: read
