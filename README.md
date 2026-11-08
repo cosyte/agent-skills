@@ -168,4 +168,4 @@ node scripts/check.mjs
 
 ## License
 
-MIT, copyright 2026 Cosyte. See [LICENSE](LICENSE). The `@cosyte` packages are MIT-licensed too.
+MIT, copyright 2026 Cosyte LLC. See [LICENSE](LICENSE). The `@cosyte` packages are MIT-licensed too.
