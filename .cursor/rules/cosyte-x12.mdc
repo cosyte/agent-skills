@@ -113,6 +113,9 @@ Read it; never infer it.
   functions and never send anything.
 - `X12Decimal`: every money, percent and quantity field. String-backed with BigInt arithmetic; an
   empty slot reads `undefined`, not zero. Never `parseFloat` an EDI amount.
+- The 835 balance: BPR-02 equals the sum of CLP-04 minus the sum of PLB amounts, each PLB amount
+  in its raw sign, so a positive PLB amount reduces the payment (a recoupment). Reconcile with the
+  subtraction.
 - `X12ParseError`: thrown only for the four structural fatals (`X12_NO_ISA_HEADER`,
   `X12_ISA_TOO_SHORT`, `X12_INVALID_DELIMITERS`, `X12_EMPTY_INPUT`). Everything else is a warning
   on `ix.warnings`.
@@ -133,17 +136,12 @@ Read it; never infer it.
   pre-005010 revisions.
 - Round trips are not byte-exact in general: `serialize(parse(s)) === s` is not guaranteed. Line
   breaks between segments are absorbed at parse. Do not promise a byte-identical re-emit.
-- Known defect in 0.1.2, `build271` writes no BHT segment. 005010X279A1 requires BHT after ST in
+- Known defect in 0.1.4, `build271` writes no BHT segment. 005010X279A1 requires BHT after ST in
   every 271, and the builder writes ST and then the HL loops. A trading partner or validator that
   checks the implementation guide will reject the output. Do not send a `build271` result to a
   trading partner; use it only where BHT is not checked.
-- Known defect in 0.1.2, `get271Eligibility` does not warn when a 271 has no BHT. If BHT matters to
+- Known defect in 0.1.4, `get271Eligibility` does not warn when a 271 has no BHT. If BHT matters to
   you, check it yourself: `tx.segments.some((s) => s.id === "BHT")`.
-- Known defect in 0.1.2, two JSDoc comments on the 835 read types state the balance as the sum of
-  CLP-04 plus the sum of PLB equals BPR-02. That sign is wrong. The code, and the rest of the
-  documentation, use BPR-02 equals the sum of CLP-04 minus the sum of PLB amounts: a positive PLB
-  amount reduces the payment (a recoupment). Reconcile with the subtraction and ignore the editor
-  hover text.
 - The README points to `KNOWN-LIMITATIONS.md` as the full do-not-over-trust list:
   https://github.com/cosyte/x12/blob/main/KNOWN-LIMITATIONS.md
 

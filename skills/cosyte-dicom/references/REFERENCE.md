@@ -1,9 +1,9 @@
 # @cosyte/dicom reference
 
-Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.1`. Every name below is exported
-from the single entry point `@cosyte/dicom`. Facts come from the published README and type
-declarations; where the README is longer, this file points to the README section rather than
-paraphrasing it.
+Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.4`. Every name below is exported
+from the single entry point `@cosyte/dicom`. Facts come from the published README, the type
+declarations and the docs.cosyte.com/dicom pages the README links; where a page is longer, this file
+points to it rather than paraphrasing it.
 
 ## API map by task
 
@@ -132,11 +132,12 @@ export function values(buf: Buffer) {
 }
 ```
 
-Date conversion rules from the README: `toObject`, `toISO` and `toDate` take any of `DA`, `TM`, `DT`;
-the returned `DateParts` keys are singular (`hour`, `minute`, `second`) and `month` is 1 to 12; `toDate`
-returns `undefined` when neither the value nor the caller states an offset; an impossible date such as
-`18700230` converts to `undefined`, never to the next day. When you import date helpers from two Cosyte
-parsers in one file, alias them (`toISO as dicomToISO`).
+Date conversion rules from the [access patterns](https://docs.cosyte.com/dicom/access-patterns) page:
+`toObject`, `toISO` and `toDate` take any of `DA`, `TM`, `DT`; the returned `DateParts` keys are
+singular (`hour`, `minute`, `second`) and `month` is 1 to 12; `toDate` returns `undefined` when neither
+the value nor the caller states an offset; an impossible date such as `18700230` converts to
+`undefined`, never to the next day. When you import date helpers from two Cosyte parsers in one file,
+alias them (`toISO as dicomToISO`).
 
 ### Vendor profiles
 
@@ -208,7 +209,7 @@ What the output says about itself:
 `group0004Removals` and `group0004RemovalCount`, `unregisteredElementRemovals` and
 `unregisteredElementRemovalCount`, `uidMap`, `warnings`, `retained`.
 
-### Find root elements that 0.1.1 flags with a false DICOM_VR_MISMATCH
+### Find root elements that 0.1.4 flags with a false DICOM_VR_MISMATCH
 
 ```ts
 import { Dictionary, parseDicom } from "@cosyte/dicom";
@@ -228,7 +229,7 @@ export function multiVrElements(buf: Buffer): string[] {
 This covers the root Data Set only. `DicomParseWarning.position.byteOffset` inside a defined-length
 Sequence Item is relative to that Item, so it is not a lookup key against the root.
 
-## Known defect (0.1.1)
+## Known defects (0.1.4)
 
 The Explicit VR Little Endian and Big Endian parsers compare the on-wire VR only with the first VR of
 the dictionary entry. A tag the standard lets carry two VRs, such as Pixel Data `(7FE0,0010)` as `OB` or
@@ -242,15 +243,21 @@ under its on-wire VR.
   `DICOM_VR_MISMATCH`, on files that may carry such tags.
 - Treat `DICOM_VR_MISMATCH` on a multi-VR tag as possibly false.
 
-## De-identification residuals (from the README's Known limitations)
+A warning escalated to a throw, by `{ strict: true }` or by a profile's `escalate` list, throws
+`DicomParseError` with the warning code in `code` (for example `DICOM_VR_MISMATCH`), although the type
+declares `code` as `FatalCode`, the four codes in `FATAL_CODES`. A `switch` over `FatalCode` does not
+reach it. Check for the four fatal codes explicitly and handle any other `code` as an escalated warning.
+
+## De-identification residuals (from the known limitations and scope pages)
 
 `deidentify()` output is metadata-de-identified only, and the README says none of the open residuals
-is an all-clear. Read the README's "Known limitations & non-goals" section in full before sharing an
-output. In short:
+is an all-clear. Read the [known limitations](https://docs.cosyte.com/dicom/limitations) and
+[scope and non-goals](https://docs.cosyte.com/dicom/non-goals) pages in full before sharing an output.
+In short:
 
 - Pixels are untouched. Burned-in annotation raises `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`.
 - No date transformation on any branch. `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` rides with the modified
-  dates option, and the README claims no PS3.15 Annex E conformance for that option.
+  dates option, and the known limitations page claims no PS3.15 Annex E conformance for that option.
 - A sequence the parser could not open is emptied (data loss), named in `report.unauditableSequences`,
   with `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`. A conformant file nested deeper than
   `NESTING_DEPTH_LIMIT` (64) loses that sequence the same way.
@@ -290,12 +297,13 @@ output. In short:
 | Code | Meaning |
 | --- | --- |
 | `NOT_DICOM_PART_10` | Not a Part 10 file (also with `stripPreamble: "require"` and no `DICM` magic) |
-| `INVALID_FILE_META` | Truncated or malformed File Meta group |
+| `INVALID_FILE_META` | A File Meta group, or a Data Set after it, that is cut short or malformed; the message says which |
 | `UNSUPPORTED_TRANSFER_SYNTAX` | SMPTE ST 2110, a retired UID, or any other syntax not read |
 | `EMPTY_INPUT` | Zero-byte input |
 
 `DicomParseError.offsetFrame` is one of `OFFSET_FRAMES`: `"input"`, `"inflated-dataset"`,
-`"value-slice"`. Only `"input"` is an index into the buffer you passed.
+`"value-slice"`. Only `"input"` is an index into the buffer you passed. An escalated warning is thrown
+as `DicomParseError` too, with the warning code in `code` (see Known defects).
 
 ### Other thrown codes
 

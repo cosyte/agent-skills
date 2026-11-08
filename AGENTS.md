@@ -44,8 +44,9 @@ Rules that hold for every package:
 - Each skill is `skills/<name>/SKILL.md`, with longer material in `skills/<name>/references/`.
   Frontmatter uses only the Agent Skills spec keys (`name`, `description`, `license`, `metadata`),
   and `name` equals the folder name.
-- Facts about a package come only from its published npm README and type declarations at the
-  version in `metadata.version`. Never add a capability the README does not state.
+- Facts about a package come only from its published npm README, type declarations and changelog
+  at the version in `metadata.version`, or from the docs.cosyte.com page the README links for that
+  topic. Never add a capability those sources do not state.
 - `.cursor/rules/*.mdc` are generated. Edit the skill, then run `node scripts/build-cursor-rules.mjs`.
 - Run `node scripts/check.mjs` before every commit; CI runs it and `node scripts/check.mjs --live`.
   It needs Node 22 or later and no install step.

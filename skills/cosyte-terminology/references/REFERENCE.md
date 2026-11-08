@@ -1,6 +1,6 @@
-# @cosyte/terminology reference (0.1.1)
+# @cosyte/terminology reference (0.1.4)
 
-Everything here comes from the published 0.1.1 README and type declarations. Check
+Everything here comes from the published 0.1.4 README and type declarations. Check
 `node_modules/@cosyte/terminology/dist/index.d.ts` for any name not listed.
 
 ## Code-system identity

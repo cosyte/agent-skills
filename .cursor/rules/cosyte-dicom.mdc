@@ -94,9 +94,9 @@ tolerated 1 DICOM_MISSING_PREAMBLE
 ## Limits and known defects
 
 - Do not expect pixel decoding (no decompression, frame assembly, offset-table interpretation or
-  rendering), transcoding, DIMSE networking or DICOMweb. They are out of scope for `@cosyte/dicom`; the
-  README lists them only as future work, and no package for them is published. Hand
-  `readPixelDataFragments` output to a codec of your choice.
+  rendering), transcoding, DIMSE networking or DICOMweb. They are out of scope for `@cosyte/dicom`; its
+  [scope and non-goals](https://docs.cosyte.com/dicom/non-goals) page lists them only as future work,
+  and no package for them is published. Hand `readPixelDataFragments` output to a codec of your choice.
 - Wrap `parseDicom` in `try`/`catch` per file when walking a folder: `NOT_DICOM_PART_10`,
   `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX` (SMPTE ST 2110 and every retired UID) and
   `EMPTY_INPUT` always throw `DicomParseError`.
@@ -106,13 +106,18 @@ tolerated 1 DICOM_MISSING_PREAMBLE
 - Treat `DICOM_DUPLICATE_TAG_IN_DATA_SET` and `DICOM_DUPLICATE_FILE_META_ELEMENT` like a fatal: each
   reports a value the parsed object lost.
 - Coded values are surfaced, not validated against SNOMED, LOINC or other terminologies.
-- Known defect in 0.1.1: the Explicit VR parsers compare the on-wire VR only with the first VR the
+- Known defect in 0.1.4: the Explicit VR parsers compare the on-wire VR only with the first VR the
   dictionary lists, so a tag the standard allows two VRs, such as Pixel Data `(7FE0,0010)` written as
   `OW` (common in native images) or `(0028,0106)` written as `SS`, gets a false `DICOM_VR_MISMATCH`.
   Do not parse with `{ strict: true }` or `{ profile: profiles.strict }` (which escalates
   `DICOM_VR_MISMATCH`) on files that may carry such tags: the parse throws. In lenient mode, treat a
   `DICOM_VR_MISMATCH` on such a tag as possibly false; check the element's `vr` against
   `Dictionary.lookup(tag)?.vr`.
+- Known defect in 0.1.4: a warning escalated to a throw (by `{ strict: true }` or a profile's
+  `escalate` list) throws `DicomParseError` whose `code` is the warning code, such as
+  `DICOM_VR_MISMATCH`, although the type declares `code` as one of the four `FATAL_CODES`. A `switch`
+  over `FatalCode` misses it: test for the four fatal codes and treat any other `code` as an escalated
+  warning.
 - `deidentify()` output is metadata-de-identified only, and its open residuals are disclosed, not
   closed. Read `report.warnings` and the report's finding lists after every run; the full residual list
   is in [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-dicom/references/REFERENCE.md).

@@ -44,7 +44,8 @@ Common combinations:
 
 ## How the parsers behave
 
-These points are stated across the parser READMEs; the package skill has the specifics.
+These points are stated across the parser READMEs, type declarations and documentation pages; the
+package skill has the specifics.
 
 - `@cosyte/x12`, `ccda`, `ncpdp` and `astm` describe themselves as lenient on parse and spec-clean
   on emit: a tolerated deviation becomes a warning with a stable code rather than an exception.
@@ -73,7 +74,7 @@ These points are stated across the parser READMEs; the package skill has the spe
 npm install @cosyte/hl7
 ```
 
-Swap in the package you need. Every package README also gives the pnpm and yarn forms.
+Swap in the package you need. `pnpm add` and `yarn add` work the same way.
 
 ## Docs
 

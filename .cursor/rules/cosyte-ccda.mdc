@@ -115,11 +115,11 @@ that is not `ClinicalDocument`) always throws `CcdaParseError`; catch it and log
 ## Limits and known defects
 
 - **Do not display or match on `HumanName.text`** (`getPatient()?.name?.text`, an author's
-  `person?.text`). In 0.1.1 it is the `<name>` element's trimmed text content, so compact XML,
+  `person?.text`). In 0.1.3 it is the `<name>` element's trimmed text content, so compact XML,
   including every document `buildCcda` emits, gives run-together names (`JaneDoe`) and
   pretty-printed XML gives newlines and indentation between parts. Join `prefix`, `given`, `family`
-  and `suffix` yourself with single spaces. Do not copy the `.text` fallback in the `CcdaPatient` and
-  `CcdaAuthor` JSDoc examples.
+  and `suffix` yourself with single spaces. Since 0.1.2 the `HumanName` type declaration says the
+  same, and the `CcdaPatient` and `CcdaAuthor` JSDoc examples no longer fall back to `.text`.
 - Do not read `TS.date` for a birth date or other offset-less value: it assumes UTC and can be a day
   out. Use `toObject`, `toISO`, or `toDate` (`undefined` unless an offset is known).
 - A quiet parse is not a conformance result. Required-section checks under-warn (read

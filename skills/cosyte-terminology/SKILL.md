@@ -4,7 +4,7 @@ description: "Run FHIR terminology operations over code systems, value sets and 
 license: MIT
 metadata:
   package: "@cosyte/terminology"
-  version: "0.1.1"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/terminology/intro"
 ---
 
@@ -29,8 +29,9 @@ resources and standard releases you supply, and it never fabricates a code.
 Use another skill when:
 
 - Reading or validating FHIR resources: `cosyte-fhir` (it takes a terminology service you implement).
-- Reading a C-CDA document: `cosyte-ccda` (its README says its `TerminologyAdapter` mirrors this
-  engine, so you can wire the engine in behind it).
+- Reading a C-CDA document: `cosyte-ccda` (its code systems page,
+  https://docs.cosyte.com/ccda/code-systems, says its `TerminologyAdapter` mirrors this engine, so
+  you can wire the engine in behind it).
 - You are converting HL7 v2 to FHIR: `cosyte-transform`.
 
 ## Install
@@ -40,8 +41,8 @@ npm install @cosyte/terminology
 ```
 
 Zero runtime dependencies (Node standard library only). Dual ESM and CJS, built with `tsup` and
-checked with `attw`. The README does not state a Node version; check `engines` in the installed
-`package.json`. Runnable programs are in the repository's `examples/` folder.
+checked with `attw`. Node.js 22 or later, tested on 22, 24 and 26. Runnable programs are in the
+repository's `examples/` folder.
 
 ## Minimal example
 
@@ -116,7 +117,7 @@ true true false
 
 ## Limits and known defects
 
-We have no known defects on record for 0.1.1. The README states these limits:
+We have no known defects on record for 0.1.4. The README states these limits:
 
 - **No code-system release is bundled.** SNOMED CT, CPT, LOINC, UMLS/RxNorm, the CMS GEM files, the
   NLM complex-map refset and VSAC value sets are bring-your-own, under their steward's terms. The

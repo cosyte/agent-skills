@@ -4,7 +4,7 @@ description: "Parse, build and frame ASTM lab analyzer messages in TypeScript wi
 license: MIT
 metadata:
   package: "@cosyte/astm"
-  version: "0.1.1"
+  version: "0.1.2"
   docs: "https://docs.cosyte.com/astm/intro"
 ---
 
@@ -102,7 +102,9 @@ Universal Test ID's fourth component.
 
 ## Limits and known defects
 
-We have no known defects on our list for this version. The README states these limits:
+We have no known defects on our list for this version. The documentation pages
+[Coverage and compatibility](https://docs.cosyte.com/astm/concepts-coverage) and
+[The API, layer by layer](https://docs.cosyte.com/astm/guides-api-by-layer) state these limits:
 
 - Use `messages()` for any stream that may carry several messages or patients.
 - Check for `ASTM_RECORD_UNKNOWN_TYPE` before trusting a split: an unrecognized header merges the

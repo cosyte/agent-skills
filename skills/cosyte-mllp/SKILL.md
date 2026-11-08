@@ -4,7 +4,7 @@ description: "Send and receive HL7 v2 messages over MLLP in Node.js with @cosyte
 license: MIT
 metadata:
   package: "@cosyte/mllp"
-  version: "0.1.1"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/mllp/intro"
 ---
 
@@ -42,8 +42,8 @@ pnpm add @cosyte/mllp
 pnpm add @cosyte/hl7
 ```
 
-`engines.node` is `>=22.0.0` (CI runs 22 and 24). Published dual ESM and CommonJS, each with its
-own type declarations. Zero runtime dependencies. Three code subpaths: `@cosyte/mllp`,
+`engines.node` is `>=22.0.0` (tested on 22, 24 and 26). Published dual ESM and CommonJS, each
+with its own type declarations. Zero runtime dependencies. Three code subpaths: `@cosyte/mllp`,
 `@cosyte/mllp/testing` and `@cosyte/mllp/ack-from-hl7`. The payload API is Buffer-first: messages
 are raw bytes and charset decoding is yours.
 
@@ -190,7 +190,7 @@ bind-safety details. A full example is in `references/REFERENCE.md`.
 - The transport does not parse HL7. Use `cosyte-hl7` (or the `ack-from-hl7` subpath) for that.
 - Read the known limitations page before you depend on it:
   https://github.com/cosyte/mllp/blob/main/docs-content/limitations.md
-- Known defects: none on our list for 0.1.1.
+- Known defects: none on our list for 0.1.4.
 
 ## PHI handling
 

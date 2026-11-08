@@ -4,7 +4,7 @@ description: "Generate seeded, reproducible synthetic healthcare test fixtures i
 license: MIT
 metadata:
   package: "@cosyte/synth"
-  version: "0.1.1"
+  version: "0.1.3"
   docs: "https://docs.cosyte.com/synth/intro"
 ---
 
@@ -40,7 +40,8 @@ npm install @cosyte/synth @cosyte/hl7 @cosyte/fhir @cosyte/ccda @cosyte/x12 @cos
 
 - The parsers and `@cosyte/deid` are optional peer dependencies, each needed only for its subpath:
   `@cosyte/synth/hl7`, `/fhir`, `/ccda`, `/x12`, `/ncpdp`, `/astm`, and `/deid` (which needs
-  `@cosyte/deid` plus the parsers for the formats it pairs). Install only what you generate.
+  `@cosyte/deid` plus the parsers for the formats it pairs). Install only what you generate. Each
+  peer range is `^0.1.0`, so a peer pinned to a 0.0.x release has to move to 0.1.
 - The core (`@cosyte/synth`: seeded PRNG and synthetic-value providers) has zero third-party
   runtime dependencies. Dual ESM and CJS.
 
@@ -67,9 +68,11 @@ console.log(roundTrip(generateHl7("VXU^V04", 12345)).content.split("\r")[0]); //
 
 What the README promises, and only that:
 
-- **Seeds.** The same seed yields byte-identical output, on any machine, any run. A hand-rolled
-  seeded PRNG (`sfc32` seeded through `splitmix32`) drives every draw and `Math.random` is
-  lint-banned: "a seed, and only the seed, determines the output, byte-for-byte, anywhere."
+- **Seeds.** The same seed yields byte-identical output on the same parser versions, on any
+  machine, any run. A hand-rolled seeded PRNG (`sfc32` seeded through `splitmix32`) drives every
+  draw and `Math.random` is lint-banned: "a seed determines the output, byte for byte, on the same
+  parser versions." A parser release can change the bytes: since 0.1.2 every C-CDA document is
+  built by `@cosyte/ccda` 0.1, so a C-CDA golden file committed from 0.1.1 has to be regenerated.
   Generated artifacts and `Corpus` results are deep-frozen.
 - **Spec-clean.** Built through the parser's own builder or serializer and fed back into that
   parser, it re-parses with zero warnings. `roundTrip(...).specClean` is `true` only for zero
@@ -107,7 +110,7 @@ What the README promises, and only that:
 
 ## Limits and known defects
 
-Known defects, still present in 0.1.1. The README shows the 271, the B1 and the ASTM result
+Known defects, still present in 0.1.3. The README shows the 271, the B1 and the ASTM result
 round-tripping with `specClean: true`, so a green round-trip does not clear them:
 
 - **X12 271 EB-08 percent is a whole number** (`90`) where X12 expects a decimal fraction (`.90`),

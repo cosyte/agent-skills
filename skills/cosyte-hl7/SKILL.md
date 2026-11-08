@@ -4,7 +4,7 @@ description: "Parse, read, edit and serialize HL7 v2 messages in Node.js and Typ
 license: MIT
 metadata:
   package: "@cosyte/hl7"
-  version: "0.1.1"
+  version: "0.1.3"
   docs: "https://docs.cosyte.com/hl7/intro"
 ---
 
@@ -141,12 +141,11 @@ Every datetime is a fidelity `TS` (`raw`, `precision`, `hasTimezone`, parts), no
 - `segmentOverrides` names add reads only; typed helpers keep reading standard positions.
 - `splitBatch` does not generate batch ACKs or enforce a trailer; `parseStream` expects an
   already de-framed stream.
-- Dot-path `[N]` is 0-indexed per the type declarations (`OBX[1]` is the second OBX) while dot
-  numbers are 1-based HL7 positions. The README comment on `OBX[2]` says otherwise; check indexes
-  against a fixture.
+- Dot-path `[N]` is 0-indexed (`OBX[1]` is the second OBX) while dot numbers are 1-based HL7
+  positions. The type declarations and the documentation's access patterns page agree on this.
 - `strict: true` turns every warning into a thrown `Hl7ParseError`; the four fatal codes always
   throw. Wrap `parseHL7` in `try`/`catch` on untrusted input.
-- Known defects: none on our list for 0.1.1.
+- Known defects: none on our list for 0.1.3.
 
 ## PHI handling
 
