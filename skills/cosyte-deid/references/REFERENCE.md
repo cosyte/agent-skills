@@ -1,7 +1,7 @@
 # @cosyte/deid reference
 
-Fuller detail for the `cosyte-deid` skill. Version read: `0.1.1`. Facts come from the published README
-and type declarations. Read the README's "Known limitations & honesty" section and the limitations
+Fuller detail for the `cosyte-deid` skill. Version read: `0.1.3`. Facts come from the published README
+and type declarations. Read the README's "Known limitations and honesty" section and the limitations
 document it links before relying on this library for anything that leaves your control. Nothing here
 says an output is de-identified: the library's own label is "Safe-Harbor-transformed per the configured
 policy" (`OUTPUT_LABEL`), and it transforms per a policy and evidences what it did; it never certifies.
@@ -16,7 +16,7 @@ policy" (`OUTPUT_LABEL`), and it transforms per a policy and evidences what it d
 | `@cosyte/deid/ccda` | `deidentifyCcda(doc, options?)` returning `{ document, manifest, unexaminedResiduals }`; `CCDA_LOCUS_MAP` |
 | `@cosyte/deid/fhir` | `deidentifyFhir(resource, options?)`, `deidentifyFhirJson(json, options?)` (adds `json`); `FHIR_DEMOGRAPHIC_ELEMENTS`, `PERSON_RESOURCE_TYPES` |
 | `@cosyte/deid/x12` | `deidentifyX12(interchange, options?)`, `deidentifyX12String(raw, options?)` returning `{ x12, manifest, unexaminedResiduals }` |
-| `@cosyte/deid/ncpdp` | `deidentifyTelecom(tx, options?)`, `deidentifyTelecomString(raw, options?)` returning `{ telecom, manifest, unexaminedResiduals }`; `NCPDP_SCRIPT_REFUSAL_MESSAGE` |
+| `@cosyte/deid/ncpdp` | `deidentifyTelecom(tx, options?)`, `deidentifyTelecomString(raw, options?)` returning `{ telecom, manifest, unexaminedResiduals }`; `NCPDP_SCRIPT_REFUSAL_MESSAGE`, `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE` |
 | `@cosyte/deid/dicom` | `deidentifyDicom(dataset, options?)`, `deidentifyDicomBuffer(bytes, options?)`, `DicomDeidOptions` (`policy`, `uidMap`, `uidRoot`), `BURNED_IN_ANNOTATION_CODE`, `CID_7050`, `INPUT_METHOD_CODE_SEQUENCE_DROPPED_CODE` |
 
 The `String` and `Json` convenience entries parse for you and discard parse warnings; call the
@@ -32,10 +32,11 @@ values are retained untouched (the over-scrub guard).
   DOB to year; address to the safe 3-digit ZIP). Employer positions in GT1 / IN1 / IN2 are acted on.
   Segments not on the retain list (for example MRG, FAM, ACC) and Z-segments are blocked. OBX-5 is kept
   only when OBX-2 types it as a structured clinical value; `TX`, `FT`, `ST` and unknown types, and NTE-3,
-  are blocked. Inside retained segments PV1-44, PV1-45, OBR-7 and DG1-5 go to year and PV1-19,
-  OBR-2/3 and ORC-2/3 are removed under Safe Harbor; every other position the v2.5.1 definitions type
-  as a date is acted on too. Only this adapter reads retention classes (for example
-  `limited-data-set-geography`).
+  are blocked. Inside retained segments PV1-44, PV1-45, OBR-7 and DG1-5 go to year, and PV1-19,
+  OBR-2/3 and ORC-2/3 are blocked under Safe Harbor as the (R) catch-all: the manifest records
+  `DEID_LOCUS_BLOCKED`, not a removal (a PV1-19 whose CX-5 type is `MR`, `AN` or `SS` is handled as
+  that number). Every other position the v2.5.1 definitions type as a date is acted on too. Only this
+  adapter reads retention classes (for example `limited-data-set-geography`).
 - **C-CDA**: header participations (`recordTarget` with `guardian`, `author`, `dataEnterer`,
   `informant`, `authenticator`, `legalAuthenticator`, `participant`, `custodian`, `documentationOf`,
   `componentOf`). Section `<text>`, `nonXMLBody`, unknown and foreign elements are blocked. The coded
@@ -79,15 +80,15 @@ values are retained untouched (the over-scrub guard).
   never assigned a Safe Harbor category. A structure whose positions cannot be enumerated fails the
   pass with `DEID_POSITIONS_UNENUMERABLE`.
 - NCPDP SCRIPT is refused (`DEID_FORMAT_UNSUPPORTED`), with no partial output.
-- NCPDP Telecom: one transaction per message. With `@cosyte/ncpdp` 0.1.x a multi-transaction message
-  throws the parser's multi-transaction build error and returns nothing; an older `@cosyte/ncpdp`
-  returns only the first transaction with the header count unchanged. The `>=0.0.0` peer range in
-  0.1.1 still allows the older parser, so pin `@cosyte/ncpdp` to 0.1.x or later and split
-  multi-transaction messages first.
+- NCPDP Telecom: one transaction per message. A transmission that decodes to more than one
+  transaction is refused (`DEID_FORMAT_UNSUPPORTED`, message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`)
+  with no partial output. `@cosyte/ncpdp` 0.1.3 decodes a request whose Patient or Insurance segments
+  sit before the first group separator as two transactions (a known defect there), so such a request is
+  refused too.
 - DICOM is metadata-only (`metadataOnly` is always `true`); burned-in text (Safe Harbor category Q) is
   flagged with `burnedInAnnotationHazard` and `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`, never cleaned.
   Do not release such an image on metadata alone.
-- DICOM known defect in 0.1.1: the `(0012,0063)` value is built from the template
+- DICOM known defect in 0.1.3: the `(0012,0063)` value is built from the template
   `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "<name>"`,
   113 characters for `safe-harbor`, over the 64 that `LO` allows. Every run therefore carries
   `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings`, and a longer custom policy name makes the value
@@ -142,13 +143,13 @@ export function transformBoth(fhirJson: string, x12Text: string, key: string) {
 import { deidentifyTelecomString } from "@cosyte/deid/ncpdp";
 import { DeidError, FATAL_CODES } from "@cosyte/deid";
 
-// Pass a message that carries exactly one transaction; split multi-transaction messages first.
+// Pass a message that carries exactly one transaction; one that carries more is refused.
 export function transformClaim(raw: string) {
   try {
     return deidentifyTelecomString(raw);
   } catch (err) {
     if (err instanceof DeidError && err.code === FATAL_CODES.DEID_FORMAT_UNSUPPORTED) {
-      return undefined; // NCPDP SCRIPT XML: refused, no partial output
+      return undefined; // NCPDP SCRIPT XML, or more than one transaction: refused, no partial output
     }
     throw err;
   }
@@ -168,7 +169,7 @@ export function transformDicom(part10: Buffer) {
   return {
     bytes: result.bytes,
     holdForPixelReview: result.burnedInAnnotationHazard, // true: do not release on metadata alone
-    warningCodes: result.warnings.map((w) => w.code), // includes DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH in 0.1.1
+    warningCodes: result.warnings.map((w) => w.code), // includes DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH in 0.1.3
     uidScope: result.uidReferentialIntegrity.scope, // "single-call" or "caller-supplied-cache"
   };
 }
@@ -257,7 +258,7 @@ re-scan it.
 | `DEID_OUTPUT_INVALID` | The transformed document could not be re-serialized or no longer round-trips through its parser |
 | `DEID_POSITIONS_UNENUMERABLE` | The positions of a structure the pass would hand through could not be enumerated |
 | `DEID_DECLARATION_UNNAMEABLE` | A profile or option its coding vocabulary cannot name (the DICOM coded declaration) |
-| `DEID_FORMAT_UNSUPPORTED` | A format the adapter refuses, such as NCPDP SCRIPT |
+| `DEID_FORMAT_UNSUPPORTED` | A format the adapter refuses, such as NCPDP SCRIPT, or an NCPDP Telecom transmission carrying more than one transaction |
 
 ### Disposition codes (`DEID_DISPOSITION_CODES`, on manifest entries)
 

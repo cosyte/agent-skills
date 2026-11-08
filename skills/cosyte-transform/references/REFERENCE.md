@@ -1,4 +1,4 @@
-# @cosyte/transform reference (0.1.1)
+# @cosyte/transform reference (0.1.4)
 
 Detail from the published README and type declarations. Use synthetic data only.
 
@@ -196,11 +196,12 @@ thrown errors; per the type declarations nothing in the library throws one today
 
 ## 7. Known defect detail: PID to Patient
 
-In 0.1.1 the Patient built from PID carries `identifier` (PID-3), `name` (PID-5), `birthDate`
+In 0.1.4 the Patient built from PID carries `identifier` (PID-3), `name` (PID-5), `birthDate`
 (PID-7, time of day dropped with `TRANSFORM_ELEMENT_DROPPED`), `gender` (PID-8) and `address`
-(PID-11). PID-13 telecom raises `TRANSFORM_ELEMENT_DROPPED` at information severity. PID-10, PID-15,
-PID-19, PID-22, PID-29 and PID-30 are dropped with no issue, although the published declaration
-comment says they are deferred and flagged. Consequences and what to do:
+(PID-11), with only the first repetition of PID-5 and PID-11. PID-13 and PID-14 telecom raise one
+`TRANSFORM_ELEMENT_DROPPED` at information severity, located at `PID.13` even when only PID-14
+carried a value. PID-10, PID-15, PID-19, PID-22, PID-29 and PID-30 are dropped with no issue, as
+the README and the type declarations state. Consequences and what to do:
 
 - A deceased patient comes out with no `deceasedBoolean` or `deceasedDateTime`. Never read that
   absence as alive. Check PID-30 (`msg.get("PID.30")`) and PID-29

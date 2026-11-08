@@ -1,4 +1,4 @@
-# @cosyte/mllp reference (0.1.1)
+# @cosyte/mllp reference (0.1.4)
 
 Detail from the published README and type declarations. Placeholder application and facility
 names and synthetic control ids only; no sample carries a name, a date of birth, an identifier or
@@ -87,6 +87,10 @@ void main();
 
 - `clientAuth` is `"NONE"`, `"WANT"` (request a client certificate, surface but do not enforce)
   or `"MUST"` (request and enforce).
+- A client checks the server certificate against `tls.servername`, or against `host` when that is
+  unset. A host name is also sent as SNI; an IP address is checked but never sent as SNI, which
+  RFC 6066 reserves for host names. Since 0.1.2 that lets a TLS client reach an IP address on
+  Node 26.
 - Certificate verification is on by default. The server binds `127.0.0.1` by default; a wildcard
   host needs `allowWildcardBind: true` and then raises a one-time `MLLP_BIND_ALL_INTERFACES`
   security warning.

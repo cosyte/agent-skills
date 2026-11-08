@@ -1,6 +1,7 @@
-# @cosyte/ccda reference (0.1.1)
+# @cosyte/ccda reference (0.1.3)
 
-Everything here comes from the published 0.1.1 README and type declarations. Names are exact
+Everything here comes from the published 0.1.3 README and type declarations, and from the pages on
+docs.cosyte.com/ccda that took over the README's reference sections in 0.1.2. Names are exact
 exports; check `node_modules/@cosyte/ccda/dist/index.d.ts` when in doubt.
 
 ## API map by task
@@ -132,11 +133,17 @@ export function valueKind(value: ObservationValue | undefined): string {
   `procedures`, `encounters`, `smokingStatus`, `functionalStatus`, `functionalStatusOrganizers`,
   `functionalStatusScales`, `mentalStatus`, `mentalStatusOrganizers`, `mentalStatusScales`,
   `pastMedicalHistory`, `planOfTreatment`, `familyHistory`.
+- `functionalStatusScales` and `mentalStatusScales` take an assessment-scale type the package does
+  not export by name. Name it through the field that takes it:
+  `NonNullable<BuildCcdaInit["mentalStatusScales"]>[number]`.
 - Type-specific inputs: `assessment` and `reasonForReferral` (Referral Note; refused with a
   `TypeError` on a Discharge Summary, ignored on a CCD), `hospitalCourse`, `dischargeDiagnoses`,
   `encompassingEncounter` (Discharge Summary only; refused on the other two types).
-- A CCD SHALL section with no content is emitted as an empty `nullFlavor="NI"` section. The other
-  sections are emitted only when populated.
+- Each type always emits its SHALL sections: a CCD its six (Problems, Allergies, Medications,
+  Results, Vital Signs, Social History), each as an empty `nullFlavor="NI"` section when given no
+  content; a Referral Note Problems, Allergies, Medications, Reason for Referral, Assessment and
+  Plan of Treatment; a Discharge Summary Allergies, Hospital Course, Discharge Diagnosis and Plan
+  of Treatment. Every other section is emitted only when populated.
 - Safety-critical values are never guessed: an omitted dose or route is left absent so the parser
   flags it, a unit is emitted verbatim, a refused immunization is `negationInd="true"`, a planned
   procedure is `moodCode="INT"`, an unrecorded status value is `nullFlavor="UNK"`.

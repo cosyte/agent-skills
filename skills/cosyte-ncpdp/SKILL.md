@@ -4,7 +4,7 @@ description: "Parse, build and serialize NCPDP pharmacy messages in TypeScript w
 license: MIT
 metadata:
   package: "@cosyte/ncpdp"
-  version: "0.1.1"
+  version: "0.1.3"
   docs: "https://docs.cosyte.com/ncpdp/intro"
 ---
 
@@ -40,8 +40,9 @@ npm install @cosyte/ncpdp
 Node 22 or newer. ESM with a CommonJS build beside it, both through the `exports` map. The Telecom
 side has zero dependencies; the SCRIPT side uses `fast-xml-parser`, configured XXE-safe. Entry
 points: `@cosyte/ncpdp/telecom`, `/script`, `/common`, `/profiles` and the root. Import the Telecom
-views (`adjudication`, `compound`, `requestDur` and the rest) from `@cosyte/ncpdp/telecom`: the
-0.1.1 root declarations do not re-export them.
+views (`adjudication`, `compound`, `requestDur` and the rest), `telecomMoney` and `fieldValues` from
+`@cosyte/ncpdp/telecom`: the root re-exports only part of the Telecom surface, and these are not
+in it.
 
 ## Minimal example
 
@@ -103,7 +104,7 @@ SYNTHCARD09 RX0000001
 
 ## Limits and known defects
 
-Known defect, still present in 0.1.1: **transmission-level segments are mis-split into an extra
+Known defect, still present in 0.1.3: **transmission-level segments are mis-split into an extra
 transaction.** In a Telecom D.0 request, segments such as Patient and Insurance can sit before the
 first group separator and apply to every transaction. The reader turns every non-empty group into a
 transaction, including that leading part. A request laid out Insurance, Patient, separator, Claim,

@@ -1,7 +1,8 @@
 # @cosyte/astm reference
 
-Fuller API detail for the cosyte-astm skill, version 0.1.1. Every name here is in the published
-type declarations; behavior statements come from the package README and its JSDoc. Everything is
+Fuller API detail for the cosyte-astm skill, version 0.1.2. Every name here is in the published
+type declarations; behavior statements come from the package documentation (the README and the
+"The API, layer by layer" and "Coverage and compatibility" pages) and its JSDoc. Everything is
 imported from the single entry point `@cosyte/astm`. All record content below is synthetic.
 
 ## Exports by task
@@ -109,8 +110,8 @@ export function frameEvents(chunk: Uint8Array): LtpEvent[] {
 ```
 
 Use `detectFraming(leadingBytes)` first: serial always frames, and over TCP it varies even within one
-vendor (the README names cobas 4800 and Iguana as framed, cobas b121 as raw). Raw record bytes go
-straight to `parseAstmRecords`.
+vendor (the documentation names cobas 4800 and Iguana as framed, cobas b121 as raw). Raw record bytes
+go straight to `parseAstmRecords`.
 
 ## LIVD: local code to LOINC
 
@@ -201,7 +202,7 @@ Fatal (`FATAL_CODES`, `AstmParseError`): `EMPTY_INPUT`, `ASTM_RECORD_NO_HEADER`,
 `AstmStrictError` (record layer) or `AstmFrameStrictError` (frame layer) carrying the warnings.
 
 Record warnings (`WARNING_CODES`). Codes marked "no" may not be tolerated by any profile, per the
-README:
+documentation pages "The API, layer by layer" and "Coverage and compatibility":
 
 | Code | Profile may tolerate |
 | ---- | -------------------- |

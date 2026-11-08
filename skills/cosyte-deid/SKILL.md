@@ -4,7 +4,7 @@ description: "De-identify healthcare data in Node.js and TypeScript with @cosyte
 license: MIT
 metadata:
   package: "@cosyte/deid"
-  version: "0.1.1"
+  version: "0.1.3"
   docs: "https://docs.cosyte.com/deid/intro"
 ---
 
@@ -50,9 +50,8 @@ npm install @cosyte/deid @cosyte/hl7
 - The core has zero third-party runtime dependencies (every primitive is `node:crypto`). Each adapter
   is a subpath (`@cosyte/deid/hl7`, `/ccda`, `/fhir`, `/x12`, `/ncpdp`, `/dicom`) whose parser
   (`@cosyte/hl7`, `@cosyte/ccda`, `@cosyte/fhir`, `@cosyte/x12`, `@cosyte/ncpdp`, `@cosyte/dicom`) is
-  an optional peer dependency, every one with the range `>=0.0.0`.
+  an optional peer dependency, every one with the range `^0.1.0`.
 - `package.json`: `engines.node` `>=22.0.0`; ESM and CJS builds with types for every entry point.
-- For NCPDP, install `@cosyte/ncpdp` 0.1.x or later (see Limits).
 
 ## Minimal example
 
@@ -119,16 +118,18 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
   family-history demographics; a FHIR `ContactPoint` outside a person resource, an organisation's
   `name`, an employer `Organization` resource. Hand `unexaminedResiduals` to the support report.
 - NCPDP SCRIPT is refused with `DEID_FORMAT_UNSUPPORTED`, with no partial output.
-- NCPDP Telecom, one transaction per message in 0.1.1: with `@cosyte/ncpdp` 0.1.x a message whose
-  header declares more than one transaction throws the parser's multi-transaction build error (not a
-  `DeidError`) and returns nothing; with an older `@cosyte/ncpdp`, which the `>=0.0.0` peer range
-  still allows, only the first transaction is returned with the header count unchanged. Install
-  `@cosyte/ncpdp` 0.1.x or later and split a multi-transaction message before you de-identify it.
+- NCPDP Telecom, one transaction per message: a transmission that decodes to more than one
+  transaction is refused with a `DeidError` carrying `DEID_FORMAT_UNSUPPORTED` and the message
+  `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE` (from `@cosyte/deid/ncpdp`), and returns no transformed
+  message, no manifest and no partial output. Split such a message and de-identify each transaction on
+  its own. `@cosyte/ncpdp` 0.1.3 also decodes a request whose Patient or Insurance segments sit before
+  the first group separator as two transactions (a known defect there, see cosyte-ncpdp), so this
+  adapter refuses that request the same way.
 - DICOM is metadata-only. When `burnedInAnnotationHazard` is `true`, do not release the image on
   metadata alone. The DICOM pass is always the full PS3.15 Basic Profile; `policy` selects the label,
   and `context` is not used. Replacement UIDs agree only within one call unless you pass a shared
   `uidMap`. The residuals listed by cosyte-dicom for `@cosyte/dicom`'s `deidentify` apply here too.
-- Known defect in 0.1.1: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
+- Known defect in 0.1.3: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
   value under the safe-harbor policy (longer with a longer custom policy name), while `LO` allows 64,
   so every output carries `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings` and a non-conformant
   attribute. `DicomDeidOptions` has no option to change it. A receiver that enforces the VR may reject
@@ -161,8 +162,8 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
 - https://docs.cosyte.com/deid/intro
 - https://www.npmjs.com/package/@cosyte/deid
 - https://github.com/cosyte/deid
-- https://github.com/cosyte/deid/blob/main/docs-content/limitations.md: the limitations document the
-  README asks you to read before relying on the library for anything that leaves your control.
+- https://docs.cosyte.com/deid/limitations: the limitations page the README asks you to read before
+  relying on the library for anything that leaves your control.
 - [references/REFERENCE.md](references/REFERENCE.md): per-format coverage and residuals, adapter
   recipes, keyed transforms and the registry, profiles, the BYO redactor, the Expert Determination
   report, and the fatal and disposition code tables.

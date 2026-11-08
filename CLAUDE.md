@@ -24,7 +24,8 @@ actionlint
 A skill is read by an agent writing code for healthcare data. A capability the package does not
 have, a wrong signature, or a missing known defect becomes code that mishandles a patient record,
 and `check.mjs` still passes: it checks names, versions, links, and wording, not whether a claim is
-true. Trace every package fact to its npm README and type declarations at `metadata.version`.
+true. Trace every package fact to its npm README, type declarations and changelog at
+`metadata.version`, or to the docs.cosyte.com page the README links for that topic.
 
 ## Rules
 

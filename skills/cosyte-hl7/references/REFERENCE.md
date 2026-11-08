@@ -1,8 +1,9 @@
-# @cosyte/hl7 reference (0.1.1)
+# @cosyte/hl7 reference (0.1.3)
 
-Cookbook recipes and code tables drawn from the published README and type declarations. Every
-`ts` block is self-contained; `declare const raw: string;` stands for your own synthetic message
-text. Use synthetic data only.
+Cookbook recipes and code tables drawn from the type declarations and the package documentation
+(the access patterns, cookbook, profiles, and warning and fatal codes pages the README links).
+Every `ts` block is self-contained; `declare const raw: string;` stands for your own synthetic
+message text. Use synthetic data only.
 
 ## Contents
 
@@ -56,8 +57,9 @@ console.log(msg.allSegments().length);
   canonical wire text. `field.isNull` is `true` for the literal `""`.
 - Field coercions: `asXpn`, `asXad`, `asCx`, `asCwe`, `asCe`, `asXtn`, `asPl`, `asTs`, `asNm`,
   `asSn`, `asHd`, `asXcn`.
-- The README's structural example calls `field.component(1)`; that method is not in the 0.1.1
-  type declarations, so use a coercion (`asCwe().identifier`) or a dot-path (`"OBX.3.1"`).
+- A `Field` has no per-component method. Read a component with a coercion
+  (`asCwe().identifier`), a dot-path (`"OBX.3.1"`), or the 0-indexed arrays under `repetitions`:
+  `field.repetitions[0]?.components[1]?.subcomponents[0]` is component 2 of the first repetition.
 
 ## 2. Clinical helpers
 

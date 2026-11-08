@@ -65,28 +65,31 @@ All read on 2026-11-07.
 
 ## Packages
 
-Read on 2026-11-07. For each package we read the README and the type declarations (`dist/**/*.d.ts`)
-of the latest version on npm, from the registry document `https://registry.npmjs.org/@cosyte/<name>`
-and the tarball it lists. Every capability, API name and limit in a skill comes from those two
-sources. We typechecked every TypeScript block in the skills (82 blocks) with `tsc --strict`
-against those declarations; we did not run the packages.
+Read on 2026-11-08 (UTC). For each package we read the README, the type declarations
+(`dist/**/*.d.ts`) and the changelog of the latest version on npm, from the registry document
+`https://registry.npmjs.org/@cosyte/<name>` and the tarball it lists, and compared each tarball with
+the one for the version the skill named before (0.1.1, or 0.1.2 for `@cosyte/x12`). Where a README
+moved a section to docs.cosyte.com, we read that page in the package's repository at the release
+tag. Every capability, API name and limit in a skill comes from those sources. We typechecked every
+TypeScript block in the skills (82 blocks) with `tsc --strict` against the current declarations; we
+did not run the packages.
 
 | Package | Version read | Skill | Documentation |
 | --- | --- | --- | --- |
-| `@cosyte/hl7` | 0.1.1 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
-| `@cosyte/mllp` | 0.1.1 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
-| `@cosyte/x12` | 0.1.2 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
-| `@cosyte/fhir` | 0.1.1 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
-| `@cosyte/ccda` | 0.1.1 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
-| `@cosyte/dicom` | 0.1.1 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
-| `@cosyte/ncpdp` | 0.1.1 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
-| `@cosyte/astm` | 0.1.1 | cosyte-astm | https://docs.cosyte.com/astm/intro |
-| `@cosyte/terminology` | 0.1.1 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
-| `@cosyte/transform` | 0.1.1 | cosyte-transform | https://docs.cosyte.com/transform/intro |
-| `@cosyte/deid` | 0.1.1 | cosyte-deid | https://docs.cosyte.com/deid/intro |
-| `@cosyte/synth` | 0.1.1 | cosyte-synth | https://docs.cosyte.com/synth/intro |
-| `@cosyte/cli` | 0.1.1 | cosyte-cli | https://docs.cosyte.com/cli/intro |
-| `@cosyte/dates` | 0.1.1 | cosyte-dates | https://docs.cosyte.com/dates/intro |
+| `@cosyte/hl7` | 0.1.3 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
+| `@cosyte/mllp` | 0.1.4 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
+| `@cosyte/x12` | 0.1.4 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
+| `@cosyte/fhir` | 0.1.3 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
+| `@cosyte/ccda` | 0.1.3 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
+| `@cosyte/dicom` | 0.1.4 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
+| `@cosyte/ncpdp` | 0.1.3 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
+| `@cosyte/astm` | 0.1.2 | cosyte-astm | https://docs.cosyte.com/astm/intro |
+| `@cosyte/terminology` | 0.1.4 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
+| `@cosyte/transform` | 0.1.4 | cosyte-transform | https://docs.cosyte.com/transform/intro |
+| `@cosyte/deid` | 0.1.3 | cosyte-deid | https://docs.cosyte.com/deid/intro |
+| `@cosyte/synth` | 0.1.3 | cosyte-synth | https://docs.cosyte.com/synth/intro |
+| `@cosyte/cli` | 0.1.3 | cosyte-cli | https://docs.cosyte.com/cli/intro |
+| `@cosyte/dates` | 0.1.3 | cosyte-dates | https://docs.cosyte.com/dates/intro |
 
 ### Known defects
 
@@ -95,19 +98,23 @@ the version named, by reading the file below and, where the package ships one, i
 
 | Package | Defect stated in the skill | Evidence in the published package |
 | --- | --- | --- |
-| `@cosyte/x12` 0.1.2 | `build271` writes no BHT segment | `dist/index.mjs`, `build271`: ISA, GS, ST, then the HL loops, SE |
-| `@cosyte/x12` 0.1.2 | `get271Eligibility` does not warn on a missing BHT | `dist/index.mjs`, `get271Eligibility`: no BHT handling |
-| `@cosyte/x12` 0.1.2 | Two JSDoc comments give the 835 balance with the wrong PLB sign | `dist/index.d.ts` lines 1983 and 5032 (plus) against lines 364 and 5610 (minus) |
-| `@cosyte/transform` 0.1.1 | PID-10, 15, 19, 22, 29 and 30 dropped with no issue | `dist/index.mjs`, `buildPatient`: maps PID-3, 5, 7, 8 and 11 only |
-| `@cosyte/ccda` 0.1.1 | `HumanName.text` runs name parts together | `dist/index.mjs` `parseName`: `text` is the element's trimmed text content |
-| `@cosyte/fhir` 0.1.1 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` and `step` |
-| `@cosyte/dicom` 0.1.1 | Explicit VR parse checks only the first dictionary VR | `dist/index.mjs` line 14442, `dictEntry?.vr[0]` |
-| `@cosyte/deid` 0.1.1 | NCPDP Telecom: one transaction per message; peer range allows `@cosyte/ncpdp` 0.0.x | README states the limit; `package.json` peer range `>=0.0.0` |
-| `@cosyte/deid` 0.1.1 | DICOM (0012,0063) value longer than LO allows | `dist/dicom/index.mjs` line 438, the method text template |
-| `@cosyte/ncpdp` 0.1.1 | Transmission-level segments split into an extra transaction | `dist/telecom/index.mjs` line 247, every non-empty group becomes a transaction |
-| `@cosyte/synth` 0.1.1 | 271 EB-08 percent as a whole number | `dist/x12/index.mjs` line 910 |
-| `@cosyte/synth` 0.1.1 | NCPDP 442-E7 without implied decimals | `dist/ncpdp/index.mjs` line 663 |
-| `@cosyte/synth` 0.1.1 | ASTM header sender in H.3 and H.4, H.5 empty | `dist/astm/index.mjs` line 610 |
+| `@cosyte/x12` 0.1.4 | `build271` writes no BHT segment | `dist/index.mjs`, `build271`: ISA, GS, ST, then the HL loops, SE |
+| `@cosyte/x12` 0.1.4 | `get271Eligibility` does not warn on a missing BHT | `dist/index.mjs`, `get271Eligibility`: no BHT handling |
+| `@cosyte/transform` 0.1.4 | PID-10, 15, 19, 22, 29 and 30 dropped with no issue | `dist/index.mjs`, `buildPatient`: maps PID-3, 5, 7, 8 and 11 only |
+| `@cosyte/transform` 0.1.4 | The dropped-telecom issue points at `PID.13` even when only PID-14 carried a value | `dist/index.mjs` line 3614, one issue at `"PID.13"` for any phone number |
+| `@cosyte/ccda` 0.1.3 | `HumanName.text` runs name parts together | `dist/index.mjs` `parseName`: `text` is the element's trimmed text content |
+| `@cosyte/fhir` 0.1.3 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` and `step` |
+| `@cosyte/dicom` 0.1.4 | Explicit VR parse checks only the first dictionary VR | `dist/index.mjs` line 14461, `dictEntry?.vr[0]` |
+| `@cosyte/dicom` 0.1.4 | An escalated warning throws `DicomParseError` with a warning code where the type says `FatalCode` | `dist/index.mjs` line 12481, `escalate` passes `w.code`; `dist/index.d.ts` line 377, `readonly code: FatalCode` |
+| `@cosyte/deid` 0.1.3 | DICOM (0012,0063) value longer than LO allows | `dist/dicom/index.mjs` line 438, the method text template |
+| `@cosyte/ncpdp` 0.1.3 | Transmission-level segments split into an extra transaction | `dist/telecom/index.mjs` line 247, every non-empty group becomes a transaction |
+| `@cosyte/synth` 0.1.3 | 271 EB-08 percent as a whole number | `dist/x12/index.mjs` line 910 |
+| `@cosyte/synth` 0.1.3 | NCPDP 442-E7 without implied decimals | `dist/ncpdp/index.mjs` line 663 |
+| `@cosyte/synth` 0.1.3 | ASTM header sender in H.3 and H.4, H.5 empty | `dist/astm/index.mjs` line 610 |
 
-One defect on our list is fixed and is not in the skills: `@cosyte/ccda` 0.1.1 depends on
-`@xmldom/xmldom` 0.9.12, no longer the deprecated 0.9.10.
+Fixed since the skills were first written, and taken out of them: `@cosyte/x12` 0.1.3 corrected the
+two JSDoc comments that gave the 835 balance with the wrong PLB sign (`dist/index.d.ts` now
+subtracts the PLB amounts), and `@cosyte/deid` 0.1.2 bounded its parser peers to `^0.1.0` and now
+refuses an NCPDP Telecom transmission carrying more than one transaction with
+`DEID_FORMAT_UNSUPPORTED`. One more defect on our list is fixed and was never in the skills:
+`@cosyte/ccda` depends on `@xmldom/xmldom` 0.9.12, no longer the deprecated 0.9.10.

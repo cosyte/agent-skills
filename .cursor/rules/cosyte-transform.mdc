@@ -36,9 +36,9 @@ Use another skill when:
 npm install @cosyte/transform @cosyte/hl7 @cosyte/fhir
 ```
 
-`@cosyte/hl7` and `@cosyte/fhir` are peer dependencies: install them beside it and parse with
-`@cosyte/hl7` before you transform. No third-party runtime dependencies. Node `>=22.0.0`. Dual ESM
-and CommonJS builds with type declarations for both.
+`@cosyte/hl7` and `@cosyte/fhir` are peer dependencies on the 0.1 line (`^0.1.0`): install them
+beside it and parse with `@cosyte/hl7` before you transform. No third-party runtime dependencies.
+Node `>=22.0.0`. Dual ESM and CommonJS builds with type declarations for both.
 
 ## Minimal example
 
@@ -111,12 +111,13 @@ This MSH-7 has no timezone, so the transform reduces it to date precision and ra
 
 ## Limits and known defects
 
-- Known defect, present in 0.1.1: the PID to Patient map carries only PID-3, 5, 7, 8 and 11.
-  PID-10 race, PID-15 language, PID-19 SSN, PID-22 ethnicity, PID-29 death date and PID-30 death
-  indicator are dropped with no issue (only PID-13 telecom raises one, at information severity).
-  Never treat a Patient with no `deceased[x]` as alive, and never treat an empty issues list as
-  proof nothing was dropped. Read those six fields from the parsed message with `@cosyte/hl7`, as
-  the example does, and carry them yourself.
+- Known defect, present in 0.1.4: the PID to Patient map carries only PID-3, 5, 7, 8 and 11, and
+  only the first repetition of PID-5 and PID-11. PID-10 race, PID-15 language, PID-19 SSN, PID-22
+  ethnicity, PID-29 death date and PID-30 death indicator are dropped with no issue (only PID-13
+  and PID-14 telecom raise one, at information severity, located at `PID.13` even when only
+  PID-14 carried a value). Never treat a Patient with no `deceased[x]` as alive, and never treat
+  an empty issues list as proof nothing was dropped. Read those six fields from the parsed message
+  with `@cosyte/hl7`, as the example does, and carry them yourself.
 - "Validated" means a small internal required-element check, not FHIR conformance. None of the
   IG's seven test messages yields a Bundle clean against FHIR R4 plus US Core 9.0.0; six of seven
   are clean against base R4 (SIU_S12 breaks `app-3`). Validate against your own profiles. A clean

@@ -140,8 +140,9 @@ storage, retention, access control and your own logs remain your responsibility.
 
 ## Keeping the skills accurate
 
-Every fact in a skill comes from the package's published npm README and type declarations at the
-version the skill names. Known defects come from our own defect tracking and are each confirmed
+Every fact in a skill comes from the package's published npm README, type declarations and
+changelog at the version the skill names, or from the page on docs.cosyte.com that the README links
+for that topic. Known defects come from our own defect tracking and are each confirmed
 against the published package before they are listed. When a package releases a new version, we
 review its skill.
 
