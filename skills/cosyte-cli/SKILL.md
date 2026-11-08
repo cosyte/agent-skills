@@ -4,7 +4,7 @@ description: "Runs the cosyte command line from @cosyte/cli and its cosyte-mcp M
 license: MIT
 metadata:
   package: "@cosyte/cli"
-  version: "0.1.3"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/cli/intro"
 ---
 
@@ -43,7 +43,7 @@ Node 22.0.0 or later (the package's `engines` field), tested on 22, 24 and 26. T
 `npx @cosyte/cli ...` does not work: the package ships two executables, `cosyte` and `cosyte-mcp`,
 so `npx` needs `--package`. Versions 0.0.1 and 0.0.2 are published but cannot be installed (they
 fail with `ENOENT` on a `vendor/*.tgz` path) and re-running will not help; install the current
-release (0.1.3 when we wrote this). Hard dependencies are
+release (0.1.4 when we wrote this). Hard dependencies are
 `@cosyte/hl7` and `@cosyte/terminology`; the other parsers and `@cosyte/deid` are optional
 dependencies, so install with optional dependencies (the npm default). FHIR support comes in as a
 peer of `@cosyte/transform`. A command whose library is missing exits `69` with

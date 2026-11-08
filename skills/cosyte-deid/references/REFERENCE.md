@@ -1,6 +1,6 @@
 # @cosyte/deid reference
 
-Fuller detail for the `cosyte-deid` skill. Version read: `0.1.3`. Facts come from the published README
+Fuller detail for the `cosyte-deid` skill. Version read: `0.1.4`. Facts come from the published README
 and type declarations. Read the README's "Known limitations and honesty" section and the limitations
 document it links before relying on this library for anything that leaves your control. Nothing here
 says an output is de-identified: the library's own label is "Safe-Harbor-transformed per the configured
@@ -82,13 +82,13 @@ values are retained untouched (the over-scrub guard).
 - NCPDP SCRIPT is refused (`DEID_FORMAT_UNSUPPORTED`), with no partial output.
 - NCPDP Telecom: one transaction per message. A transmission that decodes to more than one
   transaction is refused (`DEID_FORMAT_UNSUPPORTED`, message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`)
-  with no partial output. `@cosyte/ncpdp` 0.1.3 decodes a request whose Patient or Insurance segments
+  with no partial output. `@cosyte/ncpdp` 0.1.4 decodes a request whose Patient or Insurance segments
   sit before the first group separator as two transactions (a known defect there), so such a request is
   refused too.
 - DICOM is metadata-only (`metadataOnly` is always `true`); burned-in text (Safe Harbor category Q) is
   flagged with `burnedInAnnotationHazard` and `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`, never cleaned.
   Do not release such an image on metadata alone.
-- DICOM known defect in 0.1.3: the `(0012,0063)` value is built from the template
+- DICOM known defect in 0.1.4: the `(0012,0063)` value is built from the template
   `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "<name>"`,
   113 characters for `safe-harbor`, over the 64 that `LO` allows. Every run therefore carries
   `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings`, and a longer custom policy name makes the value
@@ -169,7 +169,7 @@ export function transformDicom(part10: Buffer) {
   return {
     bytes: result.bytes,
     holdForPixelReview: result.burnedInAnnotationHazard, // true: do not release on metadata alone
-    warningCodes: result.warnings.map((w) => w.code), // includes DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH in 0.1.3
+    warningCodes: result.warnings.map((w) => w.code), // includes DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH in 0.1.4
     uidScope: result.uidReferentialIntegrity.scope, // "single-call" or "caller-supplied-cache"
   };
 }
@@ -259,6 +259,7 @@ re-scan it.
 | `DEID_POSITIONS_UNENUMERABLE` | The positions of a structure the pass would hand through could not be enumerated |
 | `DEID_DECLARATION_UNNAMEABLE` | A profile or option its coding vocabulary cannot name (the DICOM coded declaration) |
 | `DEID_FORMAT_UNSUPPORTED` | A format the adapter refuses, such as NCPDP SCRIPT, or an NCPDP Telecom transmission carrying more than one transaction |
+| `DEID_KEY_TOO_SHORT` | An HMAC key or an explicit date-shift seed is shorter than 16 bytes (128 bits), measured on the bytes the HMAC uses: a `Uint8Array` as given, a string as its UTF-8 encoding (a hex or base64 string is not decoded). An empty key stays `DEID_NO_KEY`. The message names the minimum and how to make a key (32 random bytes), and carries no key, no part of one and no length |
 
 ### Disposition codes (`DEID_DISPOSITION_CODES`, on manifest entries)
 

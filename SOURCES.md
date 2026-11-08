@@ -76,19 +76,19 @@ did not run the packages.
 
 | Package | Version read | Skill | Documentation |
 | --- | --- | --- | --- |
-| `@cosyte/hl7` | 0.1.4 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
+| `@cosyte/hl7` | 0.1.5 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
 | `@cosyte/mllp` | 0.1.4 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
-| `@cosyte/x12` | 0.1.4 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
-| `@cosyte/fhir` | 0.1.3 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
+| `@cosyte/x12` | 0.1.7 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
+| `@cosyte/fhir` | 0.1.4 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
 | `@cosyte/ccda` | 0.1.3 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
-| `@cosyte/dicom` | 0.1.4 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
-| `@cosyte/ncpdp` | 0.1.3 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
+| `@cosyte/dicom` | 0.1.7 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
+| `@cosyte/ncpdp` | 0.1.4 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
 | `@cosyte/astm` | 0.1.3 | cosyte-astm | https://docs.cosyte.com/astm/intro |
 | `@cosyte/terminology` | 0.1.4 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
 | `@cosyte/transform` | 0.1.4 | cosyte-transform | https://docs.cosyte.com/transform/intro |
-| `@cosyte/deid` | 0.1.3 | cosyte-deid | https://docs.cosyte.com/deid/intro |
+| `@cosyte/deid` | 0.1.4 | cosyte-deid | https://docs.cosyte.com/deid/intro |
 | `@cosyte/synth` | 0.1.3 | cosyte-synth | https://docs.cosyte.com/synth/intro |
-| `@cosyte/cli` | 0.1.3 | cosyte-cli | https://docs.cosyte.com/cli/intro |
+| `@cosyte/cli` | 0.1.4 | cosyte-cli | https://docs.cosyte.com/cli/intro |
 | `@cosyte/dates` | 0.1.3 | cosyte-dates | https://docs.cosyte.com/dates/intro |
 
 ### Known defects
@@ -98,16 +98,16 @@ the version named, by reading the file below and, where the package ships one, i
 
 | Package | Defect stated in the skill | Evidence in the published package |
 | --- | --- | --- |
-| `@cosyte/x12` 0.1.4 | `build271` writes no BHT segment | `dist/index.mjs`, `build271`: ISA, GS, ST, then the HL loops, SE |
-| `@cosyte/x12` 0.1.4 | `get271Eligibility` does not warn on a missing BHT | `dist/index.mjs`, `get271Eligibility`: no BHT handling |
+| `@cosyte/x12` 0.1.7 | `build271` writes no BHT segment | `dist/index.mjs` line 8204, `build271` joins ISA, GS, ST, the HL loops, SE |
+| `@cosyte/x12` 0.1.7 | `get271Eligibility` does not warn on a missing BHT | `dist/index.mjs` lines 7669 to 7858, `get271Eligibility`: no BHT handling |
 | `@cosyte/transform` 0.1.4 | PID-10, 15, 19, 22, 29 and 30 dropped with no issue | `dist/index.mjs`, `buildPatient`: maps PID-3, 5, 7, 8 and 11 only |
 | `@cosyte/transform` 0.1.4 | The dropped-telecom issue points at `PID.13` even when only PID-14 carried a value | `dist/index.mjs` line 3614, one issue at `"PID.13"` for any phone number |
 | `@cosyte/ccda` 0.1.3 | `HumanName.text` runs name parts together | `dist/index.mjs` `parseName`: `text` is the element's trimmed text content |
-| `@cosyte/fhir` 0.1.3 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` and `step` |
-| `@cosyte/dicom` 0.1.4 | Explicit VR parse checks only the first dictionary VR | `dist/index.mjs` line 14461, `dictEntry?.vr[0]` |
-| `@cosyte/dicom` 0.1.4 | An escalated warning throws `DicomParseError` with a warning code where the type says `FatalCode` | `dist/index.mjs` line 12481, `escalate` passes `w.code`; `dist/index.d.ts` line 377, `readonly code: FatalCode` |
-| `@cosyte/deid` 0.1.3 | DICOM (0012,0063) value longer than LO allows | `dist/dicom/index.mjs` line 438, the method text template |
-| `@cosyte/ncpdp` 0.1.3 | Transmission-level segments split into an extra transaction | `dist/telecom/index.mjs` line 247, every non-empty group becomes a transaction |
+| `@cosyte/fhir` 0.1.4 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` (line 4222) and `step` (line 4230) |
+| `@cosyte/dicom` 0.1.7 | Explicit VR parse checks only the first dictionary VR | `dist/index.mjs` line 14477, `dictEntry?.vr[0]` |
+| `@cosyte/dicom` 0.1.7 | An escalated warning throws `DicomParseError` with a warning code where the type says `FatalCode` | `dist/index.mjs` line 12497, `escalate` passes `w.code`; `dist/index.d.ts` line 377, `readonly code: FatalCode` |
+| `@cosyte/deid` 0.1.4 | DICOM (0012,0063) value longer than LO allows | `dist/dicom/index.mjs` line 438, the method text template |
+| `@cosyte/ncpdp` 0.1.4 | Transmission-level segments split into an extra transaction | `dist/telecom/index.mjs` line 247, every non-empty group becomes a transaction |
 | `@cosyte/synth` 0.1.3 | 271 EB-08 percent as a whole number | `dist/x12/index.mjs` line 910 |
 | `@cosyte/synth` 0.1.3 | NCPDP 442-E7 without implied decimals | `dist/ncpdp/index.mjs` line 663 |
 | `@cosyte/synth` 0.1.3 | ASTM header sender in H.3 and H.4, H.5 empty | `dist/astm/index.mjs` line 610 |

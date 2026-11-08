@@ -4,7 +4,7 @@ description: "Parse, build and serialize NCPDP pharmacy messages in TypeScript w
 license: MIT
 metadata:
   package: "@cosyte/ncpdp"
-  version: "0.1.3"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/ncpdp/intro"
 ---
 
@@ -104,7 +104,7 @@ SYNTHCARD09 RX0000001
 
 ## Limits and known defects
 
-Known defect, still present in 0.1.3: **transmission-level segments are mis-split into an extra
+Known defect, still present in 0.1.4: **transmission-level segments are mis-split into an extra
 transaction.** In a Telecom D.0 request, segments such as Patient and Insurance can sit before the
 first group separator and apply to every transaction. The reader turns every non-empty group into a
 transaction, including that leading part. A request laid out Insurance, Patient, separator, Claim,
