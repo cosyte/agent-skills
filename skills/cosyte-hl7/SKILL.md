@@ -4,7 +4,7 @@ description: "Parse, read, edit and serialize HL7 v2 messages in Node.js and Typ
 license: MIT
 metadata:
   package: "@cosyte/hl7"
-  version: "0.1.3"
+  version: "0.1.4"
   docs: "https://docs.cosyte.com/hl7/intro"
 ---
 
@@ -145,7 +145,7 @@ Every datetime is a fidelity `TS` (`raw`, `precision`, `hasTimezone`, parts), no
   positions. The type declarations and the documentation's access patterns page agree on this.
 - `strict: true` turns every warning into a thrown `Hl7ParseError`; the four fatal codes always
   throw. Wrap `parseHL7` in `try`/`catch` on untrusted input.
-- Known defects: none on our list for 0.1.3.
+- Known defects: none on our list for 0.1.4.
 
 ## PHI handling
 

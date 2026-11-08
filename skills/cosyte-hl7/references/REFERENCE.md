@@ -1,4 +1,4 @@
-# @cosyte/hl7 reference (0.1.3)
+# @cosyte/hl7 reference (0.1.4)
 
 Cookbook recipes and code tables drawn from the type declarations and the package documentation
 (the access patterns, cookbook, profiles, and warning and fatal codes pages the README links).

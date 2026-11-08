@@ -4,7 +4,7 @@ description: "Parse, build and frame ASTM lab analyzer messages in TypeScript wi
 license: MIT
 metadata:
   package: "@cosyte/astm"
-  version: "0.1.2"
+  version: "0.1.3"
   docs: "https://docs.cosyte.com/astm/intro"
 ---
 

@@ -1,6 +1,6 @@
 # @cosyte/astm reference
 
-Fuller API detail for the cosyte-astm skill, version 0.1.2. Every name here is in the published
+Fuller API detail for the cosyte-astm skill, version 0.1.3. Every name here is in the published
 type declarations; behavior statements come from the package documentation (the README and the
 "The API, layer by layer" and "Coverage and compatibility" pages) and its JSDoc. Everything is
 imported from the single entry point `@cosyte/astm`. All record content below is synthetic.
