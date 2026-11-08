@@ -76,14 +76,14 @@ did not run the packages.
 
 | Package | Version read | Skill | Documentation |
 | --- | --- | --- | --- |
-| `@cosyte/hl7` | 0.1.3 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
+| `@cosyte/hl7` | 0.1.4 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
 | `@cosyte/mllp` | 0.1.4 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
 | `@cosyte/x12` | 0.1.4 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
 | `@cosyte/fhir` | 0.1.3 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
 | `@cosyte/ccda` | 0.1.3 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
 | `@cosyte/dicom` | 0.1.4 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
 | `@cosyte/ncpdp` | 0.1.3 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
-| `@cosyte/astm` | 0.1.2 | cosyte-astm | https://docs.cosyte.com/astm/intro |
+| `@cosyte/astm` | 0.1.3 | cosyte-astm | https://docs.cosyte.com/astm/intro |
 | `@cosyte/terminology` | 0.1.4 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
 | `@cosyte/transform` | 0.1.4 | cosyte-transform | https://docs.cosyte.com/transform/intro |
 | `@cosyte/deid` | 0.1.3 | cosyte-deid | https://docs.cosyte.com/deid/intro |

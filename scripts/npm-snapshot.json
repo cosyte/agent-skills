@@ -3,7 +3,7 @@
   "fetched": "2026-11-08",
   "packages": {
     "@cosyte/astm": {
-      "latest": "0.1.2"
+      "latest": "0.1.3"
     },
     "@cosyte/ccda": {
       "latest": "0.1.3"
@@ -24,7 +24,7 @@
       "latest": "0.1.3"
     },
     "@cosyte/hl7": {
-      "latest": "0.1.3"
+      "latest": "0.1.4"
     },
     "@cosyte/mllp": {
       "latest": "0.1.4"
