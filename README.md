@@ -167,6 +167,8 @@ node scripts/check.mjs
 
 `node scripts/check.mjs --update-snapshot` refreshes the npm snapshot after a release.
 
+Need an integration built, or hosted and run for you? See our [integration services](https://cosyte.com/integration-services).
+
 ## License
 
 MIT, copyright 2026 Cosyte LLC. See [LICENSE](LICENSE). The `@cosyte` packages are MIT-licensed too.
