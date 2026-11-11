@@ -141,4 +141,4 @@ Stated limits from the README:
 - https://docs.cosyte.com/ncpdp/intro
 - https://www.npmjs.com/package/@cosyte/ncpdp
 - https://github.com/cosyte/ncpdp
-- [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-ncpdp/references/REFERENCE.md): mis-split helper, SCRIPT example, recipes, code tables.
+- [references/REFERENCE.md](https://github.com/cosyte/agent-skills/blob/main/skills/cosyte-ncpdp/references/REFERENCE.md): SCRIPT example, recipes, code tables.

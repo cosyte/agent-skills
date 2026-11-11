@@ -145,4 +145,4 @@ Stated limits from the README:
 - https://docs.cosyte.com/ncpdp/intro
 - https://www.npmjs.com/package/@cosyte/ncpdp
 - https://github.com/cosyte/ncpdp
-- [references/REFERENCE.md](references/REFERENCE.md): mis-split helper, SCRIPT example, recipes, code tables.
+- [references/REFERENCE.md](references/REFERENCE.md): SCRIPT example, recipes, code tables.
