@@ -4,7 +4,7 @@ description: "Parse DICOM Part 10 files (.dcm, DICOMDIR) in Node.js and TypeScri
 license: MIT
 metadata:
   package: "@cosyte/dicom"
-  version: "0.1.7"
+  version: "0.1.13"
   docs: "https://docs.cosyte.com/dicom/intro"
 ---
 
@@ -114,18 +114,13 @@ tolerated 1 DICOM_MISSING_PREAMBLE
 - Treat `DICOM_DUPLICATE_TAG_IN_DATA_SET` and `DICOM_DUPLICATE_FILE_META_ELEMENT` like a fatal: each
   reports a value the parsed object lost.
 - Coded values are surfaced, not validated against SNOMED, LOINC or other terminologies.
-- Known defect in 0.1.7: the Explicit VR parsers compare the on-wire VR only with the first VR the
-  dictionary lists, so a tag the standard allows two VRs, such as Pixel Data `(7FE0,0010)` written as
-  `OW` (common in native images) or `(0028,0106)` written as `SS`, gets a false `DICOM_VR_MISMATCH`.
-  Do not parse with `{ strict: true }` or `{ profile: profiles.strict }` (which escalates
-  `DICOM_VR_MISMATCH`) on files that may carry such tags: the parse throws. In lenient mode, treat a
-  `DICOM_VR_MISMATCH` on such a tag as possibly false; check the element's `vr` against
-  `Dictionary.lookup(tag)?.vr`.
-- Known defect in 0.1.7: a warning escalated to a throw (by `{ strict: true }` or a profile's
-  `escalate` list) throws `DicomParseError` whose `code` is the warning code, such as
-  `DICOM_VR_MISMATCH`, although the type declares `code` as one of the four `FATAL_CODES`. A `switch`
-  over `FatalCode` misses it: test for the four fatal codes and treat any other `code` as an escalated
-  warning.
+- A warning escalated to a throw (by `{ strict: true }` or a profile's `escalate` list) throws
+  `DicomParseError` whose `code` is the warning code, such as `DICOM_MISSING_PREAMBLE`. Since 0.1.9
+  the type is `FatalCode | WarningCode`: give a `switch` over `err.code` a `default` branch, and treat
+  any code outside `FATAL_CODES` as an escalated warning.
+- A parsed `Dataset`, `Item` and `Element` build their elements and `rawBytes` on first read (since
+  0.1.13). Read them through `get`, `has`, `getAll`, `elements()` and `el.rawBytes`: `Object.keys`, a
+  spread and `JSON.stringify` of one no longer list them.
 - `deidentify()` output is metadata-de-identified only, and its open residuals are disclosed, not
   closed. Read `report.warnings` and the report's finding lists after every run; the full residual list
   is in [references/REFERENCE.md](references/REFERENCE.md).

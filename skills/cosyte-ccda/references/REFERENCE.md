@@ -1,6 +1,6 @@
-# @cosyte/ccda reference (0.1.3)
+# @cosyte/ccda reference (0.1.6)
 
-Everything here comes from the published 0.1.3 README and type declarations, and from the pages on
+Everything here comes from the published 0.1.6 README and type declarations, and from the pages on
 docs.cosyte.com/ccda that took over the README's reference sections in 0.1.2. Names are exact
 exports; check `node_modules/@cosyte/ccda/dist/index.d.ts` when in doubt.
 

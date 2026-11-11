@@ -4,7 +4,7 @@ description: "Send and receive HL7 v2 messages over MLLP in Node.js with @cosyte
 license: MIT
 metadata:
   package: "@cosyte/mllp"
-  version: "0.1.4"
+  version: "0.1.8"
   docs: "https://docs.cosyte.com/mllp/intro"
 ---
 
@@ -190,7 +190,7 @@ bind-safety details. A full example is in `references/REFERENCE.md`.
 - The transport does not parse HL7. Use `cosyte-hl7` (or the `ack-from-hl7` subpath) for that.
 - Read the known limitations page before you depend on it:
   https://github.com/cosyte/mllp/blob/main/docs-content/limitations.md
-- Known defects: none on our list for 0.1.4.
+- Known defects: none on our list for 0.1.8.
 
 ## PHI handling
 

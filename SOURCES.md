@@ -65,31 +65,35 @@ All read on 2026-11-07.
 
 ## Packages
 
-Read on 2026-11-08 (UTC). For each package we read the README, the type declarations
-(`dist/**/*.d.ts`) and the changelog of the latest version on npm, from the registry document
-`https://registry.npmjs.org/@cosyte/<name>` and the tarball it lists, and compared each tarball with
-the one for the version the skill named before (0.1.1, or 0.1.2 for `@cosyte/x12`). Where a README
+Read on 2026-11-08 (UTC), and brought up to the latest version on npm on 2026-11-11 (UTC). For each
+package we read the README, the type declarations (`dist/**/*.d.ts`) and the changelog of the
+latest version on npm, from the registry document `https://registry.npmjs.org/@cosyte/<name>` and
+the tarball it lists. On 2026-11-11 we read each changelog from the version the skill named before
+to the latest, and changed the skill wherever an entry fixed a defect it listed or changed a
+behavior, an option or a range it stated. Where a README
 moved a section to docs.cosyte.com, we read that page in the package's repository at the release
-tag. Every capability, API name and limit in a skill comes from those sources. We typechecked every
-TypeScript block in the skills (82 blocks) with `tsc --strict` against the current declarations; we
-did not run the packages.
+tag. Every capability, API name and limit in a skill comes from those sources. On 2026-11-11 we
+typechecked every TypeScript block in the skills (80 blocks) with `tsc --strict` against the
+declarations of the versions in the table below: the `cosyte-synth` blocks against `@cosyte/synth`
+0.1.6 with `@cosyte/deid` 0.1.5, which its peer range requires, and every other block against
+`@cosyte/deid` 0.2.3. We did not run the packages.
 
 | Package | Version read | Skill | Documentation |
 | --- | --- | --- | --- |
-| `@cosyte/hl7` | 0.1.5 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
-| `@cosyte/mllp` | 0.1.4 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
-| `@cosyte/x12` | 0.1.7 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
-| `@cosyte/fhir` | 0.1.4 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
-| `@cosyte/ccda` | 0.1.3 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
-| `@cosyte/dicom` | 0.1.7 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
-| `@cosyte/ncpdp` | 0.1.4 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
-| `@cosyte/astm` | 0.1.3 | cosyte-astm | https://docs.cosyte.com/astm/intro |
-| `@cosyte/terminology` | 0.1.4 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
-| `@cosyte/transform` | 0.1.4 | cosyte-transform | https://docs.cosyte.com/transform/intro |
-| `@cosyte/deid` | 0.1.4 | cosyte-deid | https://docs.cosyte.com/deid/intro |
-| `@cosyte/synth` | 0.1.3 | cosyte-synth | https://docs.cosyte.com/synth/intro |
-| `@cosyte/cli` | 0.1.4 | cosyte-cli | https://docs.cosyte.com/cli/intro |
-| `@cosyte/dates` | 0.1.3 | cosyte-dates | https://docs.cosyte.com/dates/intro |
+| `@cosyte/hl7` | 0.1.10 | cosyte-hl7 | https://docs.cosyte.com/hl7/intro |
+| `@cosyte/mllp` | 0.1.8 | cosyte-mllp | https://docs.cosyte.com/mllp/intro |
+| `@cosyte/x12` | 0.1.11 | cosyte-x12 | https://docs.cosyte.com/x12/intro |
+| `@cosyte/fhir` | 0.1.11 | cosyte-fhir | https://docs.cosyte.com/fhir/intro |
+| `@cosyte/ccda` | 0.1.6 | cosyte-ccda | https://docs.cosyte.com/ccda/intro |
+| `@cosyte/dicom` | 0.1.13 | cosyte-dicom | https://docs.cosyte.com/dicom/intro |
+| `@cosyte/ncpdp` | 0.1.7 | cosyte-ncpdp | https://docs.cosyte.com/ncpdp/intro |
+| `@cosyte/astm` | 0.1.7 | cosyte-astm | https://docs.cosyte.com/astm/intro |
+| `@cosyte/terminology` | 0.1.7 | cosyte-terminology | https://docs.cosyte.com/terminology/intro |
+| `@cosyte/transform` | 0.2.1 | cosyte-transform | https://docs.cosyte.com/transform/intro |
+| `@cosyte/deid` | 0.2.3 | cosyte-deid | https://docs.cosyte.com/deid/intro |
+| `@cosyte/synth` | 0.1.6 | cosyte-synth | https://docs.cosyte.com/synth/intro |
+| `@cosyte/cli` | 0.1.8 | cosyte-cli | https://docs.cosyte.com/cli/intro |
+| `@cosyte/dates` | 0.1.6 | cosyte-dates | https://docs.cosyte.com/dates/intro |
 
 ### Known defects
 
@@ -98,19 +102,11 @@ the version named, by reading the file below and, where the package ships one, i
 
 | Package | Defect stated in the skill | Evidence in the published package |
 | --- | --- | --- |
-| `@cosyte/x12` 0.1.7 | `build271` writes no BHT segment | `dist/index.mjs` line 8204, `build271` joins ISA, GS, ST, the HL loops, SE |
-| `@cosyte/x12` 0.1.7 | `get271Eligibility` does not warn on a missing BHT | `dist/index.mjs` lines 7669 to 7858, `get271Eligibility`: no BHT handling |
-| `@cosyte/transform` 0.1.4 | PID-10, 15, 19, 22, 29 and 30 dropped with no issue | `dist/index.mjs`, `buildPatient`: maps PID-3, 5, 7, 8 and 11 only |
-| `@cosyte/transform` 0.1.4 | The dropped-telecom issue points at `PID.13` even when only PID-14 carried a value | `dist/index.mjs` line 3614, one issue at `"PID.13"` for any phone number |
-| `@cosyte/ccda` 0.1.3 | `HumanName.text` runs name parts together | `dist/index.mjs` `parseName`: `text` is the element's trimmed text content |
-| `@cosyte/fhir` 0.1.4 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` (line 4222) and `step` (line 4230) |
-| `@cosyte/dicom` 0.1.7 | Explicit VR parse checks only the first dictionary VR | `dist/index.mjs` line 14477, `dictEntry?.vr[0]` |
-| `@cosyte/dicom` 0.1.7 | An escalated warning throws `DicomParseError` with a warning code where the type says `FatalCode` | `dist/index.mjs` line 12497, `escalate` passes `w.code`; `dist/index.d.ts` line 377, `readonly code: FatalCode` |
-| `@cosyte/deid` 0.1.4 | DICOM (0012,0063) value longer than LO allows | `dist/dicom/index.mjs` line 438, the method text template |
-| `@cosyte/ncpdp` 0.1.4 | Transmission-level segments split into an extra transaction | `dist/telecom/index.mjs` line 247, every non-empty group becomes a transaction |
-| `@cosyte/synth` 0.1.3 | 271 EB-08 percent as a whole number | `dist/x12/index.mjs` line 910 |
-| `@cosyte/synth` 0.1.3 | NCPDP 442-E7 without implied decimals | `dist/ncpdp/index.mjs` line 663 |
-| `@cosyte/synth` 0.1.3 | ASTM header sender in H.3 and H.4, H.5 empty | `dist/astm/index.mjs` line 610 |
+| `@cosyte/ccda` 0.1.6 | `HumanName.text` runs name parts together | `dist/index.mjs` `parseName` (line 1767): `text` is the element's trimmed text content (line 1778) |
+| `@cosyte/fhir` 0.1.11 | `resolvePath` returns a repeating last segment as one list node | `dist/index.mjs` `resolvePath` (line 4714) and `step` (line 4722) |
+| `@cosyte/synth` 0.1.6 | 271 EB-08 percent as a whole number | `dist/x12/index.mjs` line 996 |
+| `@cosyte/synth` 0.1.6 | NCPDP 442-E7 without implied decimals | `dist/ncpdp/index.mjs` line 743 |
+| `@cosyte/synth` 0.1.6 | ASTM header sender in H.3 and H.4, H.5 empty | `dist/astm/index.mjs` line 666 |
 
 Fixed since the skills were first written, and taken out of them: `@cosyte/x12` 0.1.3 corrected the
 two JSDoc comments that gave the 835 balance with the wrong PLB sign (`dist/index.d.ts` now
@@ -118,3 +114,14 @@ subtracts the PLB amounts), and `@cosyte/deid` 0.1.2 bounded its parser peers to
 refuses an NCPDP Telecom transmission carrying more than one transaction with
 `DEID_FORMAT_UNSUPPORTED`. One more defect on our list is fixed and was never in the skills:
 `@cosyte/ccda` depends on `@xmldom/xmldom` 0.9.12, no longer the deprecated 0.9.10.
+
+Fixed since, each by the changelog entry of the release named, and taken out of the skills on
+2026-11-11: `@cosyte/dicom` 0.1.9 types `DicomParseError.code` as `FatalCode | WarningCode`, and
+0.1.11 accepts any VR the dictionary lists for a tag, so Pixel Data as `OW` raises no
+`DICOM_VR_MISMATCH`; `@cosyte/x12` 0.1.10 writes the BHT in `build271` and warns
+`X12_271_HEADER_ABSENT` from `get271Eligibility`; `@cosyte/ncpdp` 0.1.6 reads the segments ahead of
+the first group separator as transmission-level; `@cosyte/transform` 0.2.0 raises
+`TRANSFORM_ELEMENT_DROPPED` for PID-10, 15, 19, 22, 29 and 30 and locates the telecom issue at the
+field the phone came from (the Patient still does not carry those fields, and the skill says so);
+`@cosyte/deid` 0.2.1 writes De-identification Method `(0012,0063)` as four Values of at most 64
+characters.

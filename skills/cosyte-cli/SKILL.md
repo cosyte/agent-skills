@@ -4,7 +4,7 @@ description: "Runs the cosyte command line from @cosyte/cli and its cosyte-mcp M
 license: MIT
 metadata:
   package: "@cosyte/cli"
-  version: "0.1.4"
+  version: "0.1.8"
   docs: "https://docs.cosyte.com/cli/intro"
 ---
 
@@ -43,11 +43,13 @@ Node 22.0.0 or later (the package's `engines` field), tested on 22, 24 and 26. T
 `npx @cosyte/cli ...` does not work: the package ships two executables, `cosyte` and `cosyte-mcp`,
 so `npx` needs `--package`. Versions 0.0.1 and 0.0.2 are published but cannot be installed (they
 fail with `ENOENT` on a `vendor/*.tgz` path) and re-running will not help; install the current
-release (0.1.4 when we wrote this). Hard dependencies are
-`@cosyte/hl7` and `@cosyte/terminology`; the other parsers and `@cosyte/deid` are optional
-dependencies, so install with optional dependencies (the npm default). FHIR support comes in as a
-peer of `@cosyte/transform`. A command whose library is missing exits `69` with
-`CLI_PARSER_UNAVAILABLE`.
+release (0.1.8 when we wrote this). Hard dependencies are
+`@cosyte/hl7` and `@cosyte/terminology`; the other parsers, `@cosyte/deid`, `@cosyte/transform`,
+`@cosyte/fhir` (since 0.1.6) and the MCP SDK are optional dependencies, so install with optional
+dependencies (the npm default). Every `@cosyte` range is `^0.1.0`, so the CLI runs the 0.1 line of
+`@cosyte/deid` and `@cosyte/transform`, not their 0.2 releases. A command whose library is missing
+exits `69` with `CLI_PARSER_UNAVAILABLE`; an install without the MCP SDK runs every command but
+`cosyte mcp` and `cosyte-mcp`, which exit `69` naming `@modelcontextprotocol/sdk`.
 
 ## Minimal example
 
@@ -119,8 +121,10 @@ defers their shapes to the docs, so read the docs before calling them.
   inspect and validate only. `mllp`: parse and inspect only. A deferred cell is
   `CLI_FORMAT_UNSUPPORTED`, never a fake result.
 - `--profile` on `validate` is reserved: no profiles are bundled, so it exits `69`.
-- `convert` has one target, `--to fhir`, and the mapping is `@cosyte/transform`'s own (see
-  cosyte-transform for that library's limits).
+- `convert` has one target, `--to fhir`, and the mapping is `@cosyte/transform`'s own, from its 0.1
+  line (see cosyte-transform for that library's limits). On the 0.1 line PID-10, 15, 19, 22, 29 and
+  30 are dropped from the Patient with no issue, and the telecom issue is always located at
+  `PID.13`; 0.2.0 added the issues. Never read a converted Patient with no `deceased[x]` as alive.
 - `redact` refuses `astm`, `mllp` and `ncpdp` (exit `69`, no adapter) and `dicom` (exit `65`, binary
   output on a text stdout). With the library's default policy, an HL7 visit number (`PV1-19`) or a
   placer or filler order number is blocked, so the whole run exits `1` with `CLI_DEID_INCOMPLETE`
@@ -129,6 +133,9 @@ defers their shapes to the docs, so read the docs before calling them.
 - Autodetection is conservative: an ambiguous input is a data error asking for `--format`.
 - With `parse` on a stream, records reach stdout as they parse, so a later refusal can follow
   partial output. The exit code, not the output, says whether the run completed.
+- An MLLP stream that ends on a frame's FS byte without the closing CR is refused as truncated
+  (`CLI_PARSE_FAILED`, exit `65`) by `parse`, `inspect` and `deframeMllp` (since 0.1.8); before, that
+  last frame was dropped with exit `0`.
 
 ## PHI handling
 

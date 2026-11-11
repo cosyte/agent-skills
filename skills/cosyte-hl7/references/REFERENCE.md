@@ -1,4 +1,4 @@
-# @cosyte/hl7 reference (0.1.5)
+# @cosyte/hl7 reference (0.1.10)
 
 Cookbook recipes and code tables drawn from the type declarations and the package documentation
 (the access patterns, cookbook, profiles, and warning and fatal codes pages the README links).
@@ -451,7 +451,8 @@ yields batch-envelope segments. Count reconciliation stays with `splitBatch`.
 
 Tiers: 0 silent (spec-compliant), 1 auto-handled (trivial, no warning), 2 warning (recoverable,
 on `msg.warnings` and `onWarning`), 3 fatal (always throws). `{ strict: true }` escalates every
-tier-2 warning to a thrown `Hl7ParseError`.
+tier-2 warning to a thrown `Hl7ParseError` whose `code` is the warning's own code (typed
+`FatalCode | WarningCode` since 0.1.8).
 
 Tier-2 `WARNING_CODES` (20, stable; renaming one is a breaking change):
 

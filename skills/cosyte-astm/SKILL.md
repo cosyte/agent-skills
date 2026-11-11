@@ -4,7 +4,7 @@ description: "Parse, build and frame ASTM lab analyzer messages in TypeScript wi
 license: MIT
 metadata:
   package: "@cosyte/astm"
-  version: "0.1.3"
+  version: "0.1.7"
   docs: "https://docs.cosyte.com/astm/intro"
 ---
 
@@ -107,6 +107,9 @@ We have no known defects on our list for this version. The documentation pages
 [The API, layer by layer](https://docs.cosyte.com/astm/guides-api-by-layer) state these limits:
 
 - Use `messages()` for any stream that may carry several messages or patients.
+  `msg.classification` classifies the whole parsed stream, not one message: a `Q` in any message
+  makes the whole stream read as a host query. Classify one message with
+  `classifyMessage(m.records)` on each message from `messages()`.
 - Check for `ASTM_RECORD_UNKNOWN_TYPE` before trusting a split: an unrecognized header merges the
   messages around it and that warning is the only report. Do not gate on the warning count. If
   delimiter drift is a risk on your feed, parse with `{ strict: true }`.

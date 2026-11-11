@@ -1,6 +1,6 @@
 # @cosyte/dicom reference
 
-Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.7`. Every name below is exported
+Fuller API detail for the `cosyte-dicom` skill. Version read: `0.1.13`. Every name below is exported
 from the single entry point `@cosyte/dicom`. Facts come from the published README, the type
 declarations and the docs.cosyte.com/dicom pages the README links; where a page is longer, this file
 points to it rather than paraphrasing it.
@@ -160,8 +160,7 @@ export function parseAcme(buf: Buffer) {
 A profile only tightens or annotates: it resolves private tags by the file's live Private Creator
 string, escalates the warning codes it names (`escalate`) and silences the ones it names (`suppress`).
 An unknown creator degrades to `UN` plus `DICOM_PRIVATE_CREATOR_UNKNOWN`. Declare the creator in each
-Sequence Item that writes private data. Do not extend `profiles.strict` for files that may carry
-multi-VR tags (see the known defect below).
+Sequence Item that writes private data.
 
 ### Metadata de-identification with a shared UID map
 
@@ -209,44 +208,15 @@ What the output says about itself:
 `group0004Removals` and `group0004RemovalCount`, `unregisteredElementRemovals` and
 `unregisteredElementRemovalCount`, `uidMap`, `warnings`, `retained`.
 
-### Find root elements that 0.1.7 flags with a false DICOM_VR_MISMATCH
-
-```ts
-import { Dictionary, parseDicom } from "@cosyte/dicom";
-
-// Root-level elements whose on-wire VR is one the dictionary allows, but not the first one it lists.
-export function multiVrElements(buf: Buffer): string[] {
-  return parseDicom(buf)
-    .elements()
-    .filter((el) => {
-      const allowed = Dictionary.lookup(el.tag)?.vr;
-      return allowed !== undefined && allowed.length > 1 && allowed[0] !== el.vr && allowed.includes(el.vr);
-    })
-    .map((el) => el.tag);
-}
-```
-
-This covers the root Data Set only. `DicomParseWarning.position.byteOffset` inside a defined-length
-Sequence Item is relative to that Item, so it is not a lookup key against the root.
-
-## Known defects (0.1.7)
-
-The Explicit VR Little Endian and Big Endian parsers compare the on-wire VR only with the first VR of
-the dictionary entry. A tag the standard lets carry two VRs, such as Pixel Data `(7FE0,0010)` as `OB` or
-`OW`, or `(0028,0106)` Smallest Image Pixel Value as `US` or `SS`, gets a false `DICOM_VR_MISMATCH`
-when written with the second VR. `{ strict: true }` escalates every Tier-2 warning and `profiles.strict`
-escalates `DICOM_VR_MISMATCH` by name, so either one throws `DicomParseError` on, for example, a native
-image whose Pixel Data is `OW`. Lenient parsing adds a false warning and otherwise reads the element
-under its on-wire VR.
-
-- Do not use `{ strict: true }`, `profiles.strict`, or a profile that extends it or escalates
-  `DICOM_VR_MISMATCH`, on files that may carry such tags.
-- Treat `DICOM_VR_MISMATCH` on a multi-VR tag as possibly false.
+## Escalated warnings
 
 A warning escalated to a throw, by `{ strict: true }` or by a profile's `escalate` list, throws
-`DicomParseError` with the warning code in `code` (for example `DICOM_VR_MISMATCH`), although the type
-declares `code` as `FatalCode`, the four codes in `FATAL_CODES`. A `switch` over `FatalCode` does not
-reach it. Check for the four fatal codes explicitly and handle any other `code` as an escalated warning.
+`DicomParseError` with the warning code in `code` (for example `DICOM_MISSING_PREAMBLE`). Since 0.1.9
+`code` is typed `FatalCode | WarningCode`, so check `err.code in FATAL_CODES` for the four fatal codes,
+handle any other `code` as an escalated warning, and give a `switch` a `default` branch: the warning
+registry grows between releases. An Explicit VR element that carries any VR the dictionary lists for
+its tag raises no `DICOM_VR_MISMATCH` (since 0.1.11), so Pixel Data written as `OW` parses cleanly
+under `{ strict: true }`.
 
 ## De-identification residuals (from the known limitations and scope pages)
 
@@ -303,7 +273,7 @@ In short:
 
 `DicomParseError.offsetFrame` is one of `OFFSET_FRAMES`: `"input"`, `"inflated-dataset"`,
 `"value-slice"`. Only `"input"` is an index into the buffer you passed. An escalated warning is thrown
-as `DicomParseError` too, with the warning code in `code` (see Known defects).
+as `DicomParseError` too, with the warning code in `code` (see Escalated warnings).
 
 ### Other thrown codes
 
@@ -323,7 +293,8 @@ Parser deviations: `DICOM_MISSING_PREAMBLE`, `DICOM_FILE_META_GROUP_LENGTH_MISMA
 `DICOM_NONZERO_RESERVED_BYTES`, `DICOM_ODD_LENGTH_VALUE_PADDED`,
 `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED`, `DICOM_PIXEL_DATA_LENGTH_MISMATCH`,
 `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_PRIVATE_CREATOR_UNKNOWN`, `DICOM_SQ_NOT_DESCENDED`,
-`DICOM_UN_PARSED_AS_SQ`, `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`, `DICOM_VR_MISMATCH`.
+`DICOM_UN_PARSED_AS_SQ`, `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (kept in the registry, no longer raised
+since 0.1.12), `DICOM_VR_MISMATCH`.
 
 DICOMDIR: `DICOM_DIRECTORY_OFFSET_DEFLATED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
 `DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_RECORD_REVISITED`.

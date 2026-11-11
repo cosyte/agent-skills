@@ -1,6 +1,6 @@
 # @cosyte/synth reference
 
-Recipes for the cosyte-synth skill, version 0.1.3, taken from the package README. Every name here
+Recipes for the cosyte-synth skill, version 0.1.6, taken from the package README. Every name here
 is in the published type declarations. Each subpath needs its parser installed as a peer.
 
 Before you assert on generated values, read the skill's known-defect list: synth's X12 271 EB-08
@@ -209,4 +209,4 @@ passed.
 | `SYNTH_INVALID_RANGE` | an integer range with its maximum below its minimum |
 | `SYNTH_EMPTY_POOL` | a draw from an empty pool |
 | `SYNTH_INVALID_PROFILE` | a `defineSynthProfile` spec with a missing or blank name |
-| `SYNTH_UNSUPPORTED_FORMAT` | reserved; no code path in 0.1.3 raises it |
+| `SYNTH_UNSUPPORTED_FORMAT` | reserved; no code path in 0.1.6 raises it |

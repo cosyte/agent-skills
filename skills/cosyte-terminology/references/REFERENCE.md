@@ -1,12 +1,15 @@
-# @cosyte/terminology reference (0.1.4)
+# @cosyte/terminology reference (0.1.7)
 
-Everything here comes from the published 0.1.4 README and type declarations. Check
+Everything here comes from the published 0.1.7 README and type declarations. Check
 `node_modules/@cosyte/terminology/dist/index.d.ts` for any name not listed.
 
 ## Code-system identity
 
-- `resolveSystem(id)` accepts a canonical URI (case-insensitive), a `v2-XXXX` mnemonic or v2 table
-  URI or OID, a bare or `urn:oid:` OID, or an HL7 v2 Table 0396 mnemonic. It returns a
+- `resolveSystem(id)` accepts, in the order it tries them, a canonical URI (case-insensitive), a
+  mnemonic listed in `SYSTEM_IDENTITIES` (an HL7 v2 Table 0396 mnemonic or another accepted alias
+  such as `LOINC` or `CPT`, case-insensitive), a bare or `urn:oid:` OID, and an HL7 v2 table's OID or
+  `terminology.hl7.org` URI. A `v2-XXXX` mnemonic on its own is not accepted: pass the table's OID or
+  URI. It returns a
   `SystemIdentity` (`url`, `oid`, `name`, `mnemonics`) or `{ unknown: true, input }`; it never
   invents a URI. Narrow with `isUnknownSystem`.
 - Constants: `SYSTEM_IDENTITIES`, `HL7_V2_OID_ROOT`, `HL7_V2_URL_PREFIX`, `ICD10CM_SYSTEM`,
@@ -114,7 +117,9 @@ console.log(membership.undetermined ? membership.code : membership.result);
 ### CMS GEMs (ICD-9-CM and ICD-10-CM)
 
 - `loadGems({ content, direction: "9-to-10" | "10-to-9", version? })` loads a public-domain GEM file
-  you supply. Malformed rows become warnings; there is no fatal for GEM load.
+  you supply. Malformed rows become warnings; there is no fatal for GEM load. Since 0.1.7 the
+  entries of one result that carry the same five flag digits share one frozen `flags` object: tell
+  entries apart by the entries or their fields, never by the identity of `flags`.
 - `applyGem(map, code)` returns the full candidate set (`mapped: true`, `entries`, and
   `combinations` for a combination source), a steward No-Map (`mapped: false`, `noMap: true`,
   `TERM_CROSSWALK_NO_MAP`) or an absent source (`mapped: false`, `noMap: false`,

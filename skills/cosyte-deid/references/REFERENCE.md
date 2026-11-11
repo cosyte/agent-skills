@@ -1,6 +1,6 @@
 # @cosyte/deid reference
 
-Fuller detail for the `cosyte-deid` skill. Version read: `0.1.4`. Facts come from the published README
+Fuller detail for the `cosyte-deid` skill. Version read: `0.2.3`. Facts come from the published README
 and type declarations. Read the README's "Known limitations and honesty" section and the limitations
 document it links before relying on this library for anything that leaves your control. Nothing here
 says an output is de-identified: the library's own label is "Safe-Harbor-transformed per the configured
@@ -12,7 +12,7 @@ policy" (`OUTPUT_LABEL`), and it transforms per a policy and evidences what it d
 | --- | --- |
 | `@cosyte/deid` | `deidentify`, `DeidOptions`, `createDeidContext`, `DeidContext`, `createDeidRegistry`, `DeidRegistry`, `SAFE_HARBOR_POLICY`, `defineDeidPolicy`, `resolvePolicy`, `SAFE_HARBOR_PROFILE`, `LIMITED_DATA_SET_PROFILE`, `defineDeidProfile`, `profileOptions`, `buildExpertDeterminationSupportReport`, `formatExpertDeterminationSupportReport`, `EXPERT_DETERMINATION_DISCLAIMER`, `FreeTextRedactor`, `SAFE_HARBOR_CATEGORIES`, `SAFE_HARBOR_CATEGORY_META`, `DEID_DISPOSITION_CODES`, `FATAL_CODES`, `DeidError`, `OUTPUT_LABEL`, `WITHHELD_LOCUS_TOKEN`, `RETAINED_LOCUS_CLASSES`, `RESTRICTED_ZIP3`, `VERSION` |
 | `@cosyte/deid` (transform primitives) | `redact`, `generalizeDate`, `generalizeZip`, `generalizeAge`, `dateShift`, `pseudonymize`, `keyedHash`, `unkeyedHash` |
-| `@cosyte/deid/hl7` | `deidentifyHl7(msg, options?)` returning `{ document, manifest, unexaminedResiduals }`; `HL7_LOCUS_MAP`, `RETAIN_SEGMENTS`, `HL7_DATE_LOCI` |
+| `@cosyte/deid/hl7` | `deidentifyHl7(msg, options?)`, `deidentifyHl7String(raw, options?)` returning `{ document, hl7, manifest, unexaminedResiduals }`; `HL7_LOCUS_MAP`, `RETAIN_SEGMENTS`, `HL7_DATE_LOCI` |
 | `@cosyte/deid/ccda` | `deidentifyCcda(doc, options?)` returning `{ document, manifest, unexaminedResiduals }`; `CCDA_LOCUS_MAP` |
 | `@cosyte/deid/fhir` | `deidentifyFhir(resource, options?)`, `deidentifyFhirJson(json, options?)` (adds `json`); `FHIR_DEMOGRAPHIC_ELEMENTS`, `PERSON_RESOURCE_TYPES` |
 | `@cosyte/deid/x12` | `deidentifyX12(interchange, options?)`, `deidentifyX12String(raw, options?)` returning `{ x12, manifest, unexaminedResiduals }` |
@@ -81,19 +81,20 @@ values are retained untouched (the over-scrub guard).
   pass with `DEID_POSITIONS_UNENUMERABLE`.
 - NCPDP SCRIPT is refused (`DEID_FORMAT_UNSUPPORTED`), with no partial output.
 - NCPDP Telecom: one transaction per message. A transmission that decodes to more than one
-  transaction is refused (`DEID_FORMAT_UNSUPPORTED`, message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`)
-  with no partial output. `@cosyte/ncpdp` 0.1.4 decodes a request whose Patient or Insurance segments
-  sit before the first group separator as two transactions (a known defect there), so such a request is
-  refused too.
+  transaction, whose header declares more than one, or whose decode carries
+  `NCPDP_TELECOM_TRANSACTION_COUNT_MISMATCH` is refused (`DEID_FORMAT_UNSUPPORTED`, message
+  `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`) with no partial output (since 0.2.3).
+- X12: every element of the output is decided (since 0.2.0). A value that lacks the shape its
+  position expects, or sits at a position no rule names, is removed and recorded as a blocked manifest
+  row; `unexaminedResiduals` is always empty for X12.
 - DICOM is metadata-only (`metadataOnly` is always `true`); burned-in text (Safe Harbor category Q) is
   flagged with `burnedInAnnotationHazard` and `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`, never cleaned.
   Do not release such an image on metadata alone.
-- DICOM known defect in 0.1.4: the `(0012,0063)` value is built from the template
-  `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "<name>"`,
-  113 characters for `safe-harbor`, over the 64 that `LO` allows. Every run therefore carries
-  `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings`, and a longer custom policy name makes the value
-  longer. A receiver that enforces the VR may reject the attribute; confirm with your receiver before
-  you rely on it. `(0012,0064)` still carries the coded profile.
+- DICOM De-identification Method `(0012,0063)` is four Values of at most 64 characters each
+  (since 0.2.1): `Cosyte @cosyte/deid`, `PS3.15 Basic Application Level Confidentiality Profile`,
+  `metadata only`, and `policy "<name>"`. In the policy name a backslash is written as `/` and any
+  character outside printable ASCII as `?`; a name too long for its Value is cut and ends in `...`.
+  `(0012,0064)` carries the coded profile.
 
 ## Recipes
 
@@ -156,7 +157,7 @@ export function transformClaim(raw: string) {
 }
 ```
 
-### DICOM bytes, with the burned-in and method-length warnings surfaced
+### DICOM bytes, with the burned-in hazard and the warnings surfaced
 
 ```ts
 import { deidentifyDicomBuffer } from "@cosyte/deid/dicom";
@@ -169,7 +170,7 @@ export function transformDicom(part10: Buffer) {
   return {
     bytes: result.bytes,
     holdForPixelReview: result.burnedInAnnotationHazard, // true: do not release on metadata alone
-    warningCodes: result.warnings.map((w) => w.code), // includes DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH in 0.1.4
+    warningCodes: result.warnings.map((w) => w.code), // log codes, never values
     uidScope: result.uidReferentialIntegrity.scope, // "single-call" or "caller-supplied-cache"
   };
 }

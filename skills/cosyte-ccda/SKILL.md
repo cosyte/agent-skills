@@ -4,7 +4,7 @@ description: "Parse, build, edit and serialize C-CDA (HL7 CDA R2) clinical docum
 license: MIT
 metadata:
   package: "@cosyte/ccda"
-  version: "0.1.3"
+  version: "0.1.6"
   docs: "https://docs.cosyte.com/ccda/intro"
 ---
 
@@ -119,7 +119,7 @@ that is not `ClinicalDocument`) always throws `CcdaParseError`; catch it and log
 ## Limits and known defects
 
 - **Do not display or match on `HumanName.text`** (`getPatient()?.name?.text`, an author's
-  `person?.text`). In 0.1.3 it is the `<name>` element's trimmed text content, so compact XML,
+  `person?.text`). In 0.1.6 it is the `<name>` element's trimmed text content, so compact XML,
   including every document `buildCcda` emits, gives run-together names (`JaneDoe`) and
   pretty-printed XML gives newlines and indentation between parts. Join `prefix`, `given`, `family`
   and `suffix` yourself with single spaces. Since 0.1.2 the `HumanName` type declaration says the

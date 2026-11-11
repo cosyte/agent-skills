@@ -4,7 +4,7 @@ description: "Run FHIR terminology operations over code systems, value sets and 
 license: MIT
 metadata:
   package: "@cosyte/terminology"
-  version: "0.1.4"
+  version: "0.1.7"
   docs: "https://docs.cosyte.com/terminology/intro"
 ---
 
@@ -117,7 +117,7 @@ true true false
 
 ## Limits and known defects
 
-We have no known defects on record for 0.1.4. The README states these limits:
+We have no known defects on record for 0.1.7. The README states these limits:
 
 - **No code-system release is bundled.** SNOMED CT, CPT, LOINC, UMLS/RxNorm, the CMS GEM files, the
   NLM complex-map refset and VSAC value sets are bring-your-own, under their steward's terms. The

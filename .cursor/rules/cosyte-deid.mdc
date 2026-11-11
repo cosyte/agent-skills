@@ -82,7 +82,8 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
 ## Key API
 
 - Adapters, each `(input, options?)` returning the transformed model, `manifest` and
-  `unexaminedResiduals`: `deidentifyHl7` (`@cosyte/deid/hl7`), `deidentifyCcda` (`/ccda`),
+  `unexaminedResiduals`: `deidentifyHl7` and `deidentifyHl7String` (`@cosyte/deid/hl7`, also
+  return `hl7` text since 0.2.2), `deidentifyCcda` (`/ccda`),
   `deidentifyFhir` and `deidentifyFhirJson` (`/fhir`), `deidentifyX12` and `deidentifyX12String`
   (`/x12`, returns `x12` text), `deidentifyTelecom` and `deidentifyTelecomString` (`/ncpdp`, returns
   `telecom` text).
@@ -115,21 +116,24 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
   `name`, an employer `Organization` resource. Hand `unexaminedResiduals` to the support report.
 - NCPDP SCRIPT is refused with `DEID_FORMAT_UNSUPPORTED`, with no partial output.
 - NCPDP Telecom, one transaction per message: a transmission that decodes to more than one
-  transaction is refused with a `DeidError` carrying `DEID_FORMAT_UNSUPPORTED` and the message
-  `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE` (from `@cosyte/deid/ncpdp`), and returns no transformed
-  message, no manifest and no partial output. Split such a message and de-identify each transaction on
-  its own. `@cosyte/ncpdp` 0.1.4 also decodes a request whose Patient or Insurance segments sit before
-  the first group separator as two transactions (a known defect there, see cosyte-ncpdp), so this
-  adapter refuses that request the same way.
+  transaction, whose header declares more than one, or whose decode carries
+  `NCPDP_TELECOM_TRANSACTION_COUNT_MISMATCH` is refused with a `DeidError` carrying
+  `DEID_FORMAT_UNSUPPORTED` and the message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE` (from
+  `@cosyte/deid/ncpdp`), and returns no transformed message, no manifest and no partial output. Split
+  such a message and de-identify each transaction on its own. Transmission-level segments, such as
+  Patient and Insurance ahead of the first group separator, are de-identified with the transaction.
+- X12: since 0.2.0 the adapter decides every element it outputs. A value without the shape its
+  position expects (a known code, a valid date, a number, a bounded reference) is removed and
+  recorded as a blocked manifest row, a segment the pass has no shape for is removed whole, and
+  `unexaminedResiduals` is always empty for X12. Expect more removals than a 0.1 release made.
 - DICOM is metadata-only. When `burnedInAnnotationHazard` is `true`, do not release the image on
   metadata alone. The DICOM pass is always the full PS3.15 Basic Profile; `policy` selects the label,
   and `context` is not used. Replacement UIDs agree only within one call unless you pass a shared
   `uidMap`. The residuals listed by cosyte-dicom for `@cosyte/dicom`'s `deidentify` apply here too.
-- Known defect in 0.1.4: the DICOM pass writes a 113-character De-identification Method `(0012,0063)`
-  value under the safe-harbor policy (longer with a longer custom policy name), while `LO` allows 64,
-  so every output carries `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` in `warnings` and a non-conformant
-  attribute. `DicomDeidOptions` has no option to change it. A receiver that enforces the VR may reject
-  the attribute or the file: check with your receiver. The coded `(0012,0064)` still names the profile.
+- De-identification Method `(0012,0063)` is written as four Values of at most 64 characters each
+  (since 0.2.1), the last `policy "<name>"`. In the policy name a backslash is written as `/` and any
+  character outside printable ASCII as `?`, and a name too long for its Value is cut and ends in
+  `...`. The coded `(0012,0064)` names the profile.
 - Date shift and keyed surrogates are not Safe Harbor: a policy labelled `safe-harbor` that uses them
   is refused with `DEID_POLICY_INVALID`. `LIMITED_DATA_SET_PROFILE` is less protective than Safe
   Harbor, is not a certified de-identification and is not on its own a §164.514(e) Limited Data Set

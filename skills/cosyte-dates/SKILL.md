@@ -4,7 +4,7 @@ description: "Validates and converts the date parts that the @cosyte parsers ret
 license: MIT
 metadata:
   package: "@cosyte/dates"
-  version: "0.1.3"
+  version: "0.1.6"
   docs: "https://docs.cosyte.com/dates/intro"
 ---
 
