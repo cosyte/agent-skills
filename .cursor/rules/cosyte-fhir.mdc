@@ -116,15 +116,20 @@ true 0
 
 - **`resolvePath` does not flatten a repeating last segment.** It flattens repeating elements it
   walks through, but when the final segment repeats it returns the list node itself
-  (`kind: "list"`, members on `.items`). This holds in 0.1.4, and its JSDoc now says so. On a
+  (`kind: "list"`, members on `.items`). This holds in 0.1.11, and its JSDoc says so. On a
   Patient with two names, `name` and `name.given` return list nodes while `name.family` returns two
   values. Flatten with `isList` as in the example. `pathExists` is unaffected.
 - FHIR R4 (`4.0.1`) only. R5 and DSTU2 can be read but are not validated against their own
   definitions. No typed per-resource models; R4's own constraints run on eight modeled types.
 - No bundled terminology or US Core content: pass your own `profiles` and `terminology` service.
-- `type` and `profile` slicing discriminators and reslicing are not checked
-  (`PROFILE_SLICE_UNCHECKED`); FHIRPath outside the supported subset is `INVARIANT_UNCHECKED`. Never
-  report either as a pass. `valid` ignores warnings, so read `issues` too.
+- `type` and `profile` slicing discriminators are not checked (`PROFILE_SLICE_UNCHECKED`), and the
+  slices' own constraints are then not checked either; a slice whose sliced element declares no
+  `slicing` is reported `PROFILE_SLICE_NO_SLICING` (since 0.1.8) and not checked. FHIRPath outside
+  the supported subset is `INVARIANT_UNCHECKED`. Never report any of these as a pass. `valid` ignores
+  warnings, so read `issues` too.
+- A parsed resource can keep the parsed text in memory while it lives: strings of 13 or more
+  characters are slices of the input. Copy what you keep, for example with `structuredClone`, or let
+  the parsed result go.
 - No spec-clean JSON from a model read out of XML, no unit conversion, and a transaction Bundle is
   read, never executed.
 - `readSafety` fields such as `status` and `retracted` describe the root resource only; branch on

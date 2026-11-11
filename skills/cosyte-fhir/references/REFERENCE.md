@@ -1,6 +1,6 @@
-# @cosyte/fhir reference (0.1.4)
+# @cosyte/fhir reference (0.1.11)
 
-Everything here comes from the published 0.1.4 README and type declarations. The package exports
+Everything here comes from the published 0.1.11 README and type declarations. The package exports
 roughly two hundred names from one entry point; this page groups the ones most tasks need. Check
 `node_modules/@cosyte/fhir/dist/index.d.ts` for the rest.
 
@@ -21,7 +21,7 @@ roughly two hundred names from one entry point; this page groups the ones most t
   compares quantity only, `toBigInt` is exact for integer values, `toNumber` is the explicit lossy
   escape. `FhirInteger64` keeps the full 64-bit range as text with a `toBigInt()` view.
 - `resolvePath(node, path)` and `pathExists(node, path)` walk dotted element paths with `[x]` choice
-  suffixes (no functions, no filters). In 0.1.4 a repeating last segment comes back as the list node,
+  suffixes (no functions, no filters). In 0.1.11 a repeating last segment comes back as the list node,
   not its items; flatten with `isList(node) ? node.items : [node]`.
 
 ## Read and write
@@ -64,11 +64,11 @@ roughly two hundred names from one entry point; this page groups the ones most t
   `ABSENCE_MARKER_UNREADABLE`, `RETRACTED_RESOURCE`, `INVARIANT_VIOLATED`, `INVARIANT_UNCHECKED`,
   `UCUM_UNIT_UNRECOGNIZED`, `VITAL_SIGN_UNIT_NONCONFORMANT`, `VALUE_TYPE_UNEXPECTED`,
   `CODE_SYSTEM_UNKNOWN`, `CODE_SYSTEM_UNEXPECTED`, `CODE_NOT_IN_VALUESET`, `PROFILE_SLICE_UNMATCHED`,
-  `PROFILE_SLICE_UNCHECKED`, `MUST_SUPPORT_ABSENT`, `PROFILE_VERSION_MISMATCH`,
+  `PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`, `MUST_SUPPORT_ABSENT`, `PROFILE_VERSION_MISMATCH`,
   `PROFILE_FIXED_MISMATCH`, `PROFILE_PATTERN_MISMATCH`, `REFERENCE_UNRESOLVED`, `CONTAINED_CYCLE`,
   `FULLURL_ID_MISMATCH`.
-- `INVARIANT_UNCHECKED` and `PROFILE_SLICE_UNCHECKED` mean "not evaluated". Never report them as a
-  pass.
+- `INVARIANT_UNCHECKED`, `PROFILE_SLICE_UNCHECKED` and `PROFILE_SLICE_NO_SLICING` mean "not
+  evaluated". Never report them as a pass.
 
 ### Profiles
 

@@ -36,8 +36,13 @@ npm install @cosyte/synth @cosyte/hl7 @cosyte/fhir @cosyte/ccda @cosyte/x12 @cos
 
 - The parsers and `@cosyte/deid` are optional peer dependencies, each needed only for its subpath:
   `@cosyte/synth/hl7`, `/fhir`, `/ccda`, `/x12`, `/ncpdp`, `/astm`, and `/deid` (which needs
-  `@cosyte/deid` plus the parsers for the formats it pairs). Install only what you generate. Each
-  peer range is `^0.1.0`, so a peer pinned to a 0.0.x release has to move to 0.1.
+  `@cosyte/deid` plus the parsers for the formats it pairs). Install only what you generate. Since
+  0.1.6 the peer ranges are `@cosyte/hl7` `^0.1.8`, `@cosyte/fhir` `^0.1.8`, `@cosyte/ccda`
+  `^0.1.6`, `@cosyte/x12` `^0.1.10`, `@cosyte/ncpdp` `^0.1.6`, `@cosyte/astm` `^0.1.6` and
+  `@cosyte/deid` `^0.1.5`. The `@cosyte/deid` range does not admit the 0.2 line: npm refuses to
+  install `@cosyte/deid` 0.2 beside synth (`ERESOLVE`), so pair synth with `@cosyte/deid` 0.1.
+- Importing a subpath does not load its parser (since 0.1.6): the parser loads on the first call
+  that needs it, so a missing optional parser is named by that call's error, not by the import.
 - The core (`@cosyte/synth`: seeded PRNG and synthetic-value providers) has zero third-party
   runtime dependencies. Dual ESM and CJS.
 
@@ -68,7 +73,9 @@ What the README promises, and only that:
   machine, any run. A hand-rolled seeded PRNG (`sfc32` seeded through `splitmix32`) drives every
   draw and `Math.random` is lint-banned: "a seed determines the output, byte for byte, on the same
   parser versions." A parser release can change the bytes: since 0.1.2 every C-CDA document is
-  built by `@cosyte/ccda` 0.1, so a C-CDA golden file committed from 0.1.1 has to be regenerated.
+  built by `@cosyte/ccda` 0.1, so a C-CDA golden file committed from 0.1.1 has to be regenerated,
+  and since 0.1.6 every 271 carries the BHT segment `@cosyte/x12` 0.1.10 writes, so a 271 golden
+  file committed from an earlier release has to be regenerated too.
   Generated artifacts and `Corpus` results are deep-frozen.
 - **Spec-clean.** Built through the parser's own builder or serializer and fed back into that
   parser, it re-parses with zero warnings. `roundTrip(...).specClean` is `true` only for zero
@@ -96,7 +103,9 @@ What the README promises, and only that:
   `roundTrip`, `usCoreCoverage`, `generateUsCoreProfile`. `/ccda`: `generateCcd`,
   `generateReferralNote`, `ccdaCorpus`, `roundTrip`, `generateCcdaQuirk`, `ccdaQuirkRoundTrip`.
 - `/x12`: `generate837P`, `generate837I`, `generate837D`, `generate835`, `generate271`,
-  `x12Corpus`, `roundTrip`. `/ncpdp`: `generateNewRx`, `generateRxRenewalRequest`,
+  `x12Corpus`, `roundTrip`. Every corpus generator takes `verify` (default `true`, reads each
+  artifact back and records the parser's findings as its `warnings`; `false` skips the read and
+  leaves `warnings` empty unchecked). `/ncpdp`: `generateNewRx`, `generateRxRenewalRequest`,
   `generateRxChangeRequest`, `generateB1`, `generateB2`, `generateB3`, `ncpdpCorpus`,
   `scriptRoundTrip`, `telecomRoundTrip`.
 - `/astm`: `generateAstmResult`, `generateAstmOrder`, `generateAstmResultFramed`, `astmCorpus`,
@@ -106,7 +115,7 @@ What the README promises, and only that:
 
 ## Limits and known defects
 
-Known defects, still present in 0.1.3. The README shows the 271, the B1 and the ASTM result
+Known defects, still present in 0.1.6. The README shows the 271, the B1 and the ASTM result
 round-tripping with `specClean: true`, so a green round-trip does not clear them:
 
 - **X12 271 EB-08 percent is a whole number** (`90`) where X12 expects a decimal fraction (`.90`),

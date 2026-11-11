@@ -4,7 +4,7 @@ description: "Parse, build and serialize NCPDP pharmacy messages in TypeScript w
 license: MIT
 metadata:
   package: "@cosyte/ncpdp"
-  version: "0.1.4"
+  version: "0.1.7"
   docs: "https://docs.cosyte.com/ncpdp/intro"
 ---
 
@@ -37,12 +37,12 @@ pnpm add @cosyte/ncpdp
 npm install @cosyte/ncpdp
 ```
 
-Node 22 or newer. ESM with a CommonJS build beside it, both through the `exports` map. The Telecom
-side has zero dependencies; the SCRIPT side uses `fast-xml-parser`, configured XXE-safe. Entry
-points: `@cosyte/ncpdp/telecom`, `/script`, `/common`, `/profiles` and the root. Import the Telecom
-views (`adjudication`, `compound`, `requestDur` and the rest), `telecomMoney` and `fieldValues` from
-`@cosyte/ncpdp/telecom`: the root re-exports only part of the Telecom surface, and these are not
-in it.
+Node 22 or newer. ESM with a CommonJS build beside it, both through the `exports` map. No runtime
+dependencies: since 0.1.7 the SCRIPT side reads XML with its own reader, which refuses any DOCTYPE.
+Entry points: `@cosyte/ncpdp/telecom`, `/script`, `/common`, `/profiles` and the root; since 0.1.6
+the root re-exports every Telecom export. Each entry point is its own bundle, so a default profile
+set through `@cosyte/ncpdp/profiles` does not reach a parser imported from another subpath: set and
+parse through the same entry point.
 
 ## Minimal example
 
@@ -89,7 +89,8 @@ SYNTHCARD09 RX0000001
 ## Key API
 
 - `parseTelecom(raw, opts?)`: string or `Buffer` to a frozen `TelecomTransaction` (`kind`,
-  `header`, `transactions`, `transactionCount`, `decodedTransactionCount`, `warnings`).
+  `header`, `transmissionSegments`, `transactions`, `segments`, `transactionCount`,
+  `decodedTransactionCount`, `warnings`).
 - `claim(t, index?)`: request view of one transaction (cardholder, DOB, Rx number, product, quantity).
 - `adjudication(t, index?)`: response view (`status.disposition`, `pricing`, every `dur` alert).
 - `compound`, `cobOtherPayments`, `responseCob`, `requestDur`, `priorAuthorization`: `(t, index?)`.
@@ -104,17 +105,13 @@ SYNTHCARD09 RX0000001
 
 ## Limits and known defects
 
-Known defect, still present in 0.1.4: **transmission-level segments are mis-split into an extra
-transaction.** In a Telecom D.0 request, segments such as Patient and Insurance can sit before the
-first group separator and apply to every transaction. The reader turns every non-empty group into a
-transaction, including that leading part. A request laid out Insurance, Patient, separator, Claim,
-Prescriber decodes as two transactions: `claim(t)` has the date of birth but no Rx number,
-`claim(t, 1)` the reverse, and `serializeTelecom` refuses the model.
-
-- Do not trust a single claim view on a real Telecom request. Check which `t.transactions[n]`
-  holds which segment (by `segmentId` or `name`) and join the leading group to each claim yourself.
-- Treat `NCPDP_TELECOM_TRANSACTION_COUNT_MISMATCH` on such input as possibly false.
-- Do not re-serialize such a request; keep the original bytes. A helper is in the reference.
+We have no known defects on our list for 0.1.7. Since 0.1.6 the segments ahead of the first group
+separator in a Telecom request or response, such as Patient and Insurance, are transmission-level:
+they are on `transmissionSegments`, never in `transactions`, and every view addressed by a
+transaction index reads them with that transaction's own segments (its own segment wins over a
+shared one with the same id). A sender that writes its first transaction with no group separator
+in front of it and a later one with it has that first group read as transmission-level, with
+`NCPDP_TELECOM_TRANSACTION_COUNT_MISMATCH` warned.
 
 Stated limits from the README:
 

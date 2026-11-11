@@ -1,27 +1,7 @@
 # @cosyte/ncpdp reference
 
-Fuller API detail for the cosyte-ncpdp skill, version 0.1.4. Every name here is in the published
+Fuller API detail for the cosyte-ncpdp skill, version 0.1.7. Every name here is in the published
 type declarations; behavior statements come from the package README and its JSDoc.
-
-## Spot the transmission-level mis-split (known defect, present in 0.1.4)
-
-In 0.1.4 a Telecom request whose Patient and Insurance segments sit before the first group
-separator decodes that leading group as its own transaction. Find such groups before reading a
-claim view, then read the shared fields from the leading group and the claim fields from the rest.
-
-```ts
-import { findSegment, type TelecomTransaction } from "@cosyte/ncpdp/telecom";
-
-// Indexes of decoded transactions that carry no Claim (07) segment. On a request, a leading
-// entry here is how the transmission-level mis-split shows up.
-export function groupsWithoutClaim(t: TelecomTransaction): number[] {
-  return t.transactions
-    .filter((tx) => findSegment(tx.segments, "07") === undefined)
-    .map((tx) => tx.index);
-}
-```
-
-Segment names (`segment.name`) and ids are structural and safe to log; field values are not.
 
 ## Read a SCRIPT NewRx
 
@@ -104,15 +84,16 @@ The returned lines hold PHI-adjacent claim data (amounts, codes); do not send th
 | Request views | `claim`, `claimView`, `compound`, `cobOtherPayments`, `requestDur`, `priorAuthorization` |
 | Response views | `adjudication`, `responseStatus`, `responsePricing`, `responseDur`, `responseCob` |
 | Raw access | `findSegment`, `fieldValue`, `fieldValues`, `SEGMENT_NAMES`, `FIELD_NAMES`, `SEGMENT_ABSENCES` |
-| Tokenize | `tokenizeTransactions` (every group), `tokenizeBody` (first group only, says nothing about the rest) |
+| Tokenize | `tokenizeTransmission` (the transmission-level segments and the transactions), `tokenizeTransactions` (the transactions only), `tokenizeBody` (the same list as `segments`: the shared segments, then the first transaction's own) |
 | Values | `telecomQuantity`, `impliedThreeDecimal`, `telecomMoney` |
 | Emit | `buildTelecomRequest`, `serializeTelecom` |
 | Lookup tables | `RESPONSE_STATUS_MEANINGS`, `DUR_REASON_MEANINGS` |
 | Framing constants | `FIELD_SEPARATOR` (FS, 0x1C), `GROUP_SEPARATOR` (GS, 0x1D), `SEGMENT_SEPARATOR` (RS, 0x1E), `D0_HEADER_LENGTH` (56) |
 
 Every per-transaction view takes `(transaction, index?)` with `index` defaulting to the first
-transaction; an index past the last reads `undefined` or an empty array, never a throw. See the
-skill's known-defect section before relying on transaction indexes for a request.
+transaction; an index past the last reads `undefined` or an empty array, never a throw. A view
+reads the transaction's own segments and the transmission-level ones, and a transaction's own
+segment wins over a shared one with the same Segment Identification.
 
 ## SCRIPT API by task
 

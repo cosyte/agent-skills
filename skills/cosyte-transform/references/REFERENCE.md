@@ -1,4 +1,4 @@
-# @cosyte/transform reference (0.1.4)
+# @cosyte/transform reference (0.2.1)
 
 Detail from the published README and type declarations. Use synthetic data only.
 
@@ -10,7 +10,7 @@ Detail from the published README and type declarations. Use synthetic data only.
 4. Coded value translation
 5. The reverse path (FHIR to v2)
 6. Issue codes
-7. Known defect detail: PID to Patient
+7. PID fields the Patient does not carry
 
 ## 1. Datatype converters
 
@@ -188,20 +188,22 @@ for (const i of issues) console.log(i.severity, i.code, i.v2Location);
 | `TRANSFORM_REQUIRED_ELEMENT_UNKNOWN` | |
 | `TRANSFORM_SEGMENT_NOT_EMITTED` | |
 | `TRANSFORM_SEGMENT_NO_IG_MAP` | |
+| `TRANSFORM_TIMESTAMP_DROPPED_BY_PARSER` | |
 
 The grouping above is ours, for reading; branch on the code, not the column. Each code's
 severity (`error`, `warning` or `information`), FHIR issue type and static message are in
 `ISSUE_REGISTRY`. `FATAL_CODES` (`EMPTY_INPUT`, `TRANSFORM_UNSUPPORTED_INPUT`) are reserved for
 thrown errors; per the type declarations nothing in the library throws one today.
 
-## 7. Known defect detail: PID to Patient
+## 7. PID fields the Patient does not carry
 
-In 0.1.4 the Patient built from PID carries `identifier` (PID-3), `name` (PID-5), `birthDate`
-(PID-7, time of day dropped with `TRANSFORM_ELEMENT_DROPPED`), `gender` (PID-8) and `address`
-(PID-11), with only the first repetition of PID-5 and PID-11. PID-13 and PID-14 telecom raise one
-`TRANSFORM_ELEMENT_DROPPED` at information severity, located at `PID.13` even when only PID-14
-carried a value. PID-10, PID-15, PID-19, PID-22, PID-29 and PID-30 are dropped with no issue, as
-the README and the type declarations state. Consequences and what to do:
+The Patient built from PID carries `identifier` (PID-3), `name` (PID-5), `birthDate` (PID-7, time
+of day dropped with `TRANSFORM_ELEMENT_DROPPED`), `gender` (PID-8) and `address` (PID-11), with only
+the first repetition of PID-5 and PID-11. Since 0.2.0 a valued PID-10, PID-15, PID-19, PID-22,
+PID-29 or PID-30 raises `TRANSFORM_ELEMENT_DROPPED` at information severity at its own location
+(`PID.10` and so on), naming the FHIR element the guide maps it to where there is one, and PID-13
+and PID-14 telecom raise one each at `PID.13` and `PID.14`. None of these fields is mapped, and the
+issues carry no values. Consequences and what to do:
 
 - A deceased patient comes out with no `deceasedBoolean` or `deceasedDateTime`. Never read that
   absence as alive. Check PID-30 (`msg.get("PID.30")`) and PID-29
@@ -210,4 +212,4 @@ the README and the type declarations state. Consequences and what to do:
   (PID-10, CWE), `msg.patient?.ethnicity` (PID-22, CWE), `msg.patient?.language` (PID-15, CE).
 - PID-19 has no named helper; `msg.get("PID.19")` reads it. Treat it as the most sensitive value
   in the segment.
-- Do not rely on the issues list to tell you these were dropped.
+- The issues tell you a field was dropped, not its value: read the value from the parsed message.

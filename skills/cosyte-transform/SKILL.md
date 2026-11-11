@@ -4,7 +4,7 @@ description: "Convert parsed HL7 v2 messages to FHIR R4 with @cosyte/transform, 
 license: MIT
 metadata:
   package: "@cosyte/transform"
-  version: "0.1.4"
+  version: "0.2.1"
   docs: "https://docs.cosyte.com/transform/intro"
 ---
 
@@ -40,7 +40,7 @@ Use another skill when:
 npm install @cosyte/transform @cosyte/hl7 @cosyte/fhir
 ```
 
-`@cosyte/hl7` and `@cosyte/fhir` are peer dependencies on the 0.1 line (`^0.1.0`): install them
+`@cosyte/hl7` and `@cosyte/fhir` are peer dependencies at `^0.1.8` (since 0.2.1): install them
 beside it and parse with `@cosyte/hl7` before you transform. No third-party runtime dependencies.
 Node `>=22.0.0`. Dual ESM and CommonJS builds with type declarations for both.
 
@@ -76,7 +76,7 @@ for (const i of issues) {
   console.log(i.severity, i.code, i.v2Location, i.fhirPath ?? "");
 }
 
-// toFhir drops these six PID fields from the Patient with no issue. Read them here.
+// toFhir reports these six PID fields as dropped but does not map them. Read them here.
 const p = msg.patient;
 const race = p?.race?.identifier; // PID-10
 const language = p?.language?.identifier; // PID-15
@@ -115,13 +115,17 @@ This MSH-7 has no timezone, so the transform reduces it to date precision and ra
 
 ## Limits and known defects
 
-- Known defect, present in 0.1.4: the PID to Patient map carries only PID-3, 5, 7, 8 and 11, and
-  only the first repetition of PID-5 and PID-11. PID-10 race, PID-15 language, PID-19 SSN, PID-22
-  ethnicity, PID-29 death date and PID-30 death indicator are dropped with no issue (only PID-13
-  and PID-14 telecom raise one, at information severity, located at `PID.13` even when only
-  PID-14 carried a value). Never treat a Patient with no `deceased[x]` as alive, and never treat
-  an empty issues list as proof nothing was dropped. Read those six fields from the parsed message
+- The PID to Patient map carries only PID-3, 5, 7, 8 and 11, and only the first repetition of
+  PID-5 and PID-11. Since 0.2.0 each valued PID-10 race, PID-15 language, PID-19 SSN, PID-22
+  ethnicity, PID-29 death date and PID-30 death indicator raises `TRANSFORM_ELEMENT_DROPPED`
+  (information severity) at its own location, and PID-13 and PID-14 telecom raise one each at
+  `PID.13` and `PID.14`; none of them is mapped. Never treat a Patient with no `deceased[x]` as
+  alive: check the issues for `PID.29` and `PID.30`, or read those six fields from the parsed message
   with `@cosyte/hl7`, as the example does, and carry them yourself.
+- A valued PID-7, PV1-44, PV1-45 or MSH-7 that `@cosyte/hl7` cannot read as a date is left out of
+  the Bundle and raises `TRANSFORM_TIMESTAMP_DROPPED_BY_PARSER` (since 0.2.0). A timestamp part out
+  of range, such as hour 25 or 31 February, or an offset outside -14:00 to +14:00, is dropped with
+  `TRANSFORM_ELEMENT_DROPPED` and the value keeps the parts it can place.
 - "Validated" means a small internal required-element check, not FHIR conformance. None of the
   IG's seven test messages yields a Bundle clean against FHIR R4 plus US Core 9.0.0; six of seven
   are clean against base R4 (SIU_S12 breaks `app-3`). Validate against your own profiles. A clean

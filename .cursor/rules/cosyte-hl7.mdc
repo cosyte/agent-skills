@@ -91,7 +91,8 @@ Every datetime is a fidelity `TS` (`raw`, `precision`, `hasTimezone`, parts), no
 
 - `parseHL7(raw, options?)`: string or `Buffer` in, `Hl7Message` out. The second argument is a
   profile or an options bag: `strict`, `dateFormats`, `stripMllpFraming`, `profile`, `charset`,
-  `onWarning`.
+  `onWarning`, `lazy`. Since 0.1.9 each segment's tree is built on first read (`{ lazy: false }`
+  builds it during the parse); every warning is still reported before `parseHL7` returns.
 - Named helpers: `msg.meta` (`type`, `messageCode`, `triggerEvent`, `controlId`, `timestamp`),
   `msg.patient` (`mrn`, `identifiers`, `name`, `fullName`, `dateOfBirth`, `sex`, `address`,
   `phoneNumbers`, and per the type declarations `race`, `ethnicity`, `language`), `msg.visit`.
@@ -107,6 +108,9 @@ Every datetime is a fidelity `TS` (`raw`, `precision`, `hasTimezone`, parts), no
 - `msg.warnings` and `WARNING_CODES` (20 stable codes); `Hl7ParseError` with `FATAL_CODES`
   (4 codes); `ProfileDefinitionError`.
 - `splitBatch(raw)` and `parseStream(source)`: batch files and incremental parsing.
+  `readMessages(source)` and `readSegments(source)` (since 0.1.10) yield each message of a batch,
+  file or feed, or each segment of one very large message, as soon as it is complete, reading the
+  next chunk only when asked.
 - `msg.structure`, `validateMessageStructure(msg)`, `validateAgainstProfile(msg, profile)`,
   `defineConformanceProfile(profile)`.
 - `defineProfile(opts)`, `profiles` (`epic`, `cerner`, `meditech`, `athena`, `genericLab`,
@@ -139,9 +143,13 @@ Every datetime is a fidelity `TS` (`raw`, `precision`, `hasTimezone`, parts), no
   already de-framed stream.
 - Dot-path `[N]` is 0-indexed (`OBX[1]` is the second OBX) while dot numbers are 1-based HL7
   positions. The type declarations and the documentation's access patterns page agree on this.
-- `strict: true` turns every warning into a thrown `Hl7ParseError`; the four fatal codes always
-  throw. Wrap `parseHL7` in `try`/`catch` on untrusted input.
-- Known defects: none on our list for 0.1.5.
+- `strict: true` turns every warning into a thrown `Hl7ParseError` carrying the warning's own code;
+  the four fatal codes always throw. Since 0.1.8 `err.code` is typed `FatalCode | WarningCode`: give
+  a `switch` over it a `default` branch. Wrap `parseHL7` in `try`/`catch` on untrusted input.
+- Do not change the parsed tree in place: since 0.1.9 empty fields and nulls are shared, frozen
+  nodes. Edit through `setField`, `setComposite`, `addSegment` and `removeSegment`, which copy what
+  they change.
+- Known defects: none on our list for 0.1.10.
 
 ## PHI handling
 
