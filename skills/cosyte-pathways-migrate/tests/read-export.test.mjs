@@ -1,6 +1,6 @@
 // Tests for read-export.mjs and check-migration.mjs, on synthetic exports written from scratch.
 // Run with: node --test
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, readdirSync, existsSync, statSync, rmSync } from "node:fs";
@@ -19,8 +19,15 @@ function run(script, args) {
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+// Every temporary folder a test makes, removed once the tests end.
+const made = [];
+after(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
 function scratch() {
-  return mkdtempSync(join(tmpdir(), "pathways-migrate-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "pathways-migrate-test-"));
+  made.push(dir);
+  return dir;
 }
 
 function files(dir) {
@@ -78,7 +85,8 @@ test("turns secrets into environment references and never writes their values", 
   assert.ok(!text.includes("not-a-real-secret-0000"), "a secret value was written");
   const yaml = readFileSync(join(project, "channels", "synth-adt-feed", "channel.yaml"), "utf8");
   assert.match(yaml, /RESULTS_API_PASSWORD/);
-  assert.match(yaml, /siteCode: "SYNTHSITE"/);
+  assert.match(yaml, /  siteCode:\n    env: SITE_CODE\n/);
+  assert.ok(!text.includes("SYNTHSITE"), "a configuration value that is not provably harmless was written");
 });
 
 test("drops embedded sample data unless it is confirmed synthetic", () => {

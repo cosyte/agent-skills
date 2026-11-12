@@ -37,8 +37,10 @@ destinations:
   # channel over a file folder or MLLP on 127.0.0.1, or wait for routing between channels in a later
   # release.
 
-# The exported configuration map, as ctx.config. A secret is read from the environment.
+# The exported configuration map, as ctx.config. A value the reader cannot prove harmless is read
+# from the environment, with no default: MIGRATION-REPORT.md lists each variable to set.
 config:
-  siteCode: "SYNTHSITE"
+  siteCode:
+    env: SITE_CODE
   resultsApiPassword:
     env: RESULTS_API_PASSWORD

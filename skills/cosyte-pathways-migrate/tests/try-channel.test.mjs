@@ -1,8 +1,8 @@
 // Tests for try-channel.mjs that need no installed packages. Run with: node --test
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -15,8 +15,15 @@ function run(args) {
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+// Every temporary folder a test makes, removed once the tests end.
+const made = [];
+after(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
+
 function project() {
   const dir = mkdtempSync(join(tmpdir(), "pathways-try-test-"));
+  made.push(dir);
   mkdirSync(join(dir, "channels", "synth-adt-feed", "tests"), { recursive: true });
   writeFileSync(join(dir, "channels", "synth-adt-feed", "channel.yaml"), "name: synth-adt-feed\nformat: hl7v2\n");
   return dir;

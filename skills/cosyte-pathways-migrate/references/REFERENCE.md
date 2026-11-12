@@ -63,10 +63,11 @@ Every one of these is a step: it gets a marker, and `check-migration` exits 1 un
 | In the export | Status |
 | --- | --- |
 | The channel's name | converted: cut to lowercase letters, digits and hyphens |
-| Configuration map key | converted: `config.<key>` with its value; a key that looks like a secret, or a value shaped like one, becomes `{ env: <KEY> }`, converted with a flag, value not written |
-| A connector setting the reader converts (a URL, a host, a folder, a port) whose value is shaped like a secret | `{ env: <CHANNEL>_<ID>_<SETTING> }`, the element converted with a flag that names the variable, value not written. The shapes: a URL with a user name or password, a credential in a URL's query or a connection string, a private key, a signed token, an authorization header, and a long random token |
+| Configuration map key | converted: `config.<key>` with its value, only when the value is provably harmless (a boolean, a number of at most 10 digits, a duration, a host name or IPv4 address, a URL with no user name, password, query, fragment, `;`, `=` or `,`, or a file path; no part of a path or URL 20 characters or longer with letters and digits) and the key is not named like a secret. Every other value becomes `{ env: <KEY> }` with no default, converted with a flag, value not written |
+| A connector setting the reader converts (a URL, a host, a folder, a port) whose value is not provably harmless by the same rule | `{ env: <CHANNEL>_<ID>_<SETTING> }` with no default, the element converted with a flag that names the variable, value not written |
+| Two keys or settings whose names fold to one variable (`apiToken` and `api_token`) | each gets its own variable: the first in the export keeps the name, the next gets `_` and six hexadecimal digits of a hash of what it stands for. A configuration map key always keeps its name ahead of a connector setting |
 | Any other connector property named like a secret or shaped like one (a keystore or truststore password, a token, a key) | not converted, kind `credential`, listed by the property's name, value not written |
-| `${key}` in a converted setting | `{ env: <KEY> }`, with the configuration map's value as `default` when the key is not a secret |
+| `${key}` in a converted setting | `{ env: <KEY> }`, with no default, listed in the report's environment variables whether or not the configuration map has the key |
 | An embedded sample message | not converted: dropped, unless `--keep-samples-synthetic`, when it becomes `tests/sample-<owner>-<inbound or outbound>.<ext>` with no expected file |
 | Id, revision, description and export metadata | not converted: the other engine's bookkeeping |
 | A top-level element the reader does not know | not converted |
@@ -111,16 +112,17 @@ credential scan lists each line shaped like a secret, there and anywhere else in
   "destinations": [{ "id": "D1", "index": 1, "name": "Archive", "kind": "file", "settings": {}, "filter": [], "steps": [], "responseSteps": [] }],
   "scripts": { "PRE": { "empty": true }, "DEPLOY": { "empty": false, "file": "source/DEPLOY-deploy-script.js" } },
   "shared": [{ "id": "T1", "library": "Synth Helpers", "name": "padLeft", "file": "source/T1-...js", "module": "shared/....ts" }],
-  "config": [{ "key": "siteCode", "value": "SYNTHSITE", "secret": false }, { "key": "apiPassword", "env": "API_PASSWORD", "secret": true }],
-  "envRefs": ["API_PASSWORD"],
+  "config": [{ "key": "retries", "value": "3", "secret": false }, { "key": "apiPassword", "env": "API_PASSWORD", "secret": true }],
+  "envRefs": [{ "name": "API_PASSWORD", "configKey": "apiPassword", "inConfigMap": true, "usedIn": ["config.apiPassword"] }],
   "elements": [],
   "dynamic": []
 }
 ```
 
-A setting is `{ "value": "..." }`, `{ "env": "NAME", "default": "..." }`, or
-`{ "env": "NAME", "secret": true }` for a value shaped like a secret. A secret's value is never in
-the model. A `kind` of `null` is a destination that was not converted.
+A setting is `{ "value": "..." }`, `{ "env": "NAME", "ref": "key" }` for `${key}`, or
+`{ "env": "NAME", "secret": true }` for a value the reader could not prove harmless, whose value is
+never in the model. An `envRefs` entry names a configuration map key (`configKey`, `inConfigMap`)
+or a connector setting (`element`, `setting`), with `usedIn`. A `kind` of `null` is a destination that was not converted.
 
 ## report.json
 
@@ -130,11 +132,12 @@ the model. A `kind` of `null` is a destination that was not converted.
   "pathwaysVersion": "0.0.3",
   "channel": { "name": "synth-adt-feed" },
   "summary": {
-    "elements": 21, "converted": 6, "convertedWithFlag": 4, "rewritten": 0, "rewritePending": 5,
-    "notConverted": 6, "pendingSteps": 8, "unreviewedExpected": 0, "phiFindings": 0,
+    "elements": 21, "converted": 5, "convertedWithFlag": 5, "rewritten": 0, "rewritePending": 5,
+    "notConverted": 6, "pendingSteps": 8, "environmentVariables": 3, "unreviewedExpected": 0, "phiFindings": 0,
     "secretFindings": 0, "filesScanned": 11, "syntheticFilesSkipped": 0
   },
   "elements": [{ "id": "S1", "kind": "step", "name": "Set receiving app", "status": "rewrite-pending", "reason": "...", "step": true, "file": "migration/.../source/S1-....js" }],
+  "env": [{ "name": "SYNTH_ADT_FEED_D2_AUTHORIZATION", "element": "D2", "setting": "authorization header", "usedIn": ["D2 headers.Authorization"] }],
   "dynamic": [{ "element": "D1-S1", "file": "source/D1-S1-stamp.js", "line": 1, "construct": "eval" }],
   "unreviewedExpected": ["synth-1-001.expected.hl7"],
   "phi": [{ "file": "channels/synth-adt-feed/transform.ts", "line": 12, "kind": "ssn" }],

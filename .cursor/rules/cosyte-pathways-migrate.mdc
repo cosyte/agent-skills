@@ -46,12 +46,18 @@ or need the HL7 v2 API inside a transform (cosyte-hl7) or synthetic messages (co
 - **No real patient data.** Never paste a message from a live system into the conversation, a test
   or a fixture. Make inputs with @cosyte/synth. The reader drops every sample message embedded in the
   export unless the person running it passes `--keep-samples-synthetic`, confirming it is synthetic.
-- **No secret in a file the reader converts.** A setting or a configuration map value that is
-  named like a secret or shaped like one (a URL with a user name or password, a credential in a
-  query or a connection string, a key, a token) becomes an environment reference
-  (`{ env: NAME }`), and its value is not written to `channel.yaml`, `model.json` or the report. A
-  keystore or truststore password or another credential property the reader does not convert is
-  listed by name only. Tell the user which variables to set.
+- **No secret in a file the reader converts: default deny.** The reader writes a connector setting
+  or a configuration map value as it is only when it can prove the value is not a secret: a
+  boolean, a number, a duration, a host name or IP address, a URL with no user name, password,
+  query or fragment, or a file path, under a key not named like a secret. Every other value,
+  whatever it is called, becomes an environment reference (`{ env: NAME }`) with no default, and
+  its value is not written to `channel.yaml`, `model.json` or the report. This is deliberate: a
+  list of secret names and shapes always misses one. A `${key}` reference never carries a default
+  either. Each variable name stands for one key or setting; when two would share a name, the
+  second gets a suffix. The report's Environment variables table lists every variable, what it
+  stands for and where it is used, never the value: tell the user to set each one, and that a
+  plain value is restored by hand after they look at it. A keystore or truststore password or
+  another credential property the reader does not convert is listed by name only.
 - **The source copies are the exception.** Each exported script is copied verbatim into
   `migration/<name>/source/`, so a password hard-coded in a script, or sample patient data, is in
   that copy. The reader writes a `.gitignore` there that keeps the folder out of version control,
@@ -73,9 +79,9 @@ node ${CLAUDE_SKILL_DIR}/scripts/read-export.mjs path/to/export.xml --out . \
 ```
 
 - `--config-map` (optional) reads the engine's configuration map export into the channel's
-  `config:` block, read in the transform as `ctx.config`. A key whose name looks like a secret
-  (password, token, key, credential, auth), or whose value is shaped like one, becomes
-  `{ env: NAME }` and its value is dropped.
+  `config:` block, read in the transform as `ctx.config`. A value the reader cannot prove harmless,
+  or under a key whose name looks like a secret (password, token, key, credential, auth, session),
+  becomes `{ env: NAME }` and its value is dropped.
 - `--name <channel>` sets the channel name when the exported name does not make one.
 - `--keep-samples-synthetic` keeps the sample messages embedded in the export as test inputs. Pass
   it only when the user confirms they are synthetic.

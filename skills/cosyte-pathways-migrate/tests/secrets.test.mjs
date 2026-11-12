@@ -2,7 +2,7 @@
 // source copies, which are kept out of version control and scanned; that shared code templates
 // never overwrite each other; and that the reader never writes through a symlinked folder.
 // Every value here is invented. Run with: node --test
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, symlinkSync, rmSync } from "node:fs";
@@ -16,6 +16,17 @@ const fixtures = join(here, "fixtures");
 const exportXml = readFileSync(join(fixtures, "synth-adt-feed.xml"), "utf8");
 const configXml = readFileSync(join(fixtures, "synth-config-map.xml"), "utf8");
 const CHANNEL = "synth-adt-feed";
+
+// Every temporary folder a test makes, removed once the tests end.
+const made = [];
+after(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
+function scratch(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  made.push(dir);
+  return dir;
+}
 
 function run(script, args) {
   const r = spawnSync(process.execPath, [join(scripts, script), ...args], { encoding: "utf8" });
@@ -35,7 +46,7 @@ function files(dir) {
 
 // Converts an export after `edit` changes its text, with a configuration map after `editMap`.
 function convertWith(edit, editMap = (x) => x, extra = []) {
-  const work = mkdtempSync(join(tmpdir(), "pathways-migrate-secret-"));
+  const work = scratch("pathways-migrate-secret-");
   const exportFile = join(work, "export.xml");
   const mapFile = join(work, "map.xml");
   writeFileSync(exportFile, edit(exportXml));
@@ -122,7 +133,7 @@ test("a configuration map value shaped like a secret is not written, whatever it
   assert.match(yaml, /  dbUrl:\n    env: DB_URL\n/);
   assert.match(yaml, /  warehouse:\n    env: WAREHOUSE\n/);
   assert.match(yaml, /  upstreamHeader:\n    env: UPSTREAM_HEADER\n/);
-  assert.match(yaml, /siteCode: "SYNTHSITE"/, "a plain value is still kept");
+  assert.match(yaml, /  siteCode:\n    env: SITE_CODE\n/, "a value the reader cannot prove harmless is read from the environment");
 });
 
 test("a keystore or truststore password in a connector is never written, and the report names the property", () => {
@@ -192,7 +203,7 @@ test("shared code templates with the same name, or names equal after cutting, ke
 
 test("the reader refuses to write through a symlinked channels or migration folder", () => {
   for (const linked of ["channels", "migration"]) {
-    const work = mkdtempSync(join(tmpdir(), "pathways-migrate-link-"));
+    const work = scratch("pathways-migrate-link-");
     const project = join(work, "project");
     const elsewhere = join(work, "elsewhere");
     mkdirSync(project);
@@ -218,4 +229,144 @@ test("check-migration refuses to write the report through a symlinked file", () 
   assert.equal(c.code, 2, c.out + c.err);
   assert.match(c.err, /symbolic link/);
   assert.equal(readFileSync(target, "utf8"), "{}\n");
+});
+
+// A configuration map entry for each [key, value], in the fixture's shape.
+const mapEntries = (pairs) =>
+  pairs.map(([k, v]) => `  <entry>\n    <string>${k}</string>\n    <example.ConfigurationProperty>\n      <value>${v}</value>\n    </example.ConfigurationProperty>\n  </entry>\n`).join("");
+const withEntries = (pairs) => (m) => m.replace("</map>", `${mapEntries(pairs)}</map>`);
+const ARCHIVE = "<host>/var/synth/archive</host>";
+
+test("a configuration map value under a key named like a key is never written", () => {
+  const values = { hmacKey: "zebraHorseBatteryStaple", signingKey: "plainwordsecret", accessKey: "AKIASYNTHFAKE", encKey: "0123456789abcdef" };
+  const r = convertWith((x) => x.replace(ARCHIVE, "<host>${hmacKey}</host>"), withEntries(Object.entries(values)));
+  assert.equal(r.code, 1, r.err);
+  for (const v of Object.values(values)) assertNowhere(r, v);
+  const yaml = yamlOf(r.project);
+  assert.match(yaml, /dir:\n\s+env: HMAC_KEY\n\s+dryRun: true/, "the ${hmacKey} reference carries no default");
+  assert.doesNotMatch(yaml, /^\s*default:/m);
+  for (const [k, env] of [["hmacKey", "HMAC_KEY"], ["signingKey", "SIGNING_KEY"], ["accessKey", "ACCESS_KEY"], ["encKey", "ENC_KEY"]]) {
+    assert.match(yaml, new RegExp(`  ${k}:\\n    env: ${env}\\n`));
+  }
+});
+
+test("values no name or shape rule catches are read from the environment all the same", () => {
+  const values = { greeting: "aHVudGVyMg==", session: "JSESSIONID=abc123", note: "plainvalue" };
+  const r = convertWith(
+    (x) => x.replace("https://results.example.test/api/adt", "https://results.example.test/api/adt?code=Zq9vN3plainvalue"),
+    withEntries(Object.entries(values)),
+  );
+  assert.equal(r.code, 1, r.err);
+  for (const v of [...Object.values(values), "Zq9vN3plainvalue"]) assertNowhere(r, v);
+  const yaml = yamlOf(r.project);
+  assert.match(yaml, /url:\n\s+env: SYNTH_ADT_FEED_D2_URL\n/);
+  assert.match(yaml, /  greeting:\n    env: GREETING\n/);
+  assert.match(yaml, /  session:\n    env: SESSION\n/);
+});
+
+test("a value proved harmless by the closed allow rule is kept as it is", () => {
+  const values = { retries: "3", enabled: "true", timeout: "30s", archiveDir: "/var/synth/out", lookup: "https://lookup.example.test/v1", relay: "relay.example.test" };
+  const r = convertWith((x) => x, withEntries(Object.entries(values)));
+  const yaml = yamlOf(r.project);
+  for (const [k, v] of Object.entries(values)) assert.ok(yaml.includes(`  ${k}: ${JSON.stringify(v)}\n`), `${k} was not kept`);
+  assert.match(yaml, /dir: "\/var\/synth\/archive"/);
+  assert.match(yaml, /url: "https:\/\/results\.example\.test\/api\/adt"/);
+  assert.match(yaml, /port: 6661/);
+});
+
+test("two keys that fold to one environment name each get a name of their own", () => {
+  const r = convertWith(
+    (x) => x.replace(API_HOST, `<host>https://synthuser:collide-s3cret-1${AT}results.example.test/api/adt</host>`),
+    withEntries([["apiToken", "tok-one-1111"], ["api_token", "tok-two-2222"], ["db.password", "pw-one-3333"], ["dbPassword", "pw-two-4444"], ["SYNTH_ADT_FEED_D2_URL", "plainvalue"]]),
+  );
+  assert.equal(r.code, 1, r.err);
+  const model = modelOf(r.project);
+  const byKey = new Map(model.config.map((c) => [c.key, c.env]));
+  assert.equal(byKey.get("apiToken"), "API_TOKEN");
+  assert.match(byKey.get("api_token"), /^API_TOKEN_[0-9A-F]{6}$/);
+  assert.equal(byKey.get("db.password"), "DB_PASSWORD");
+  assert.match(byKey.get("dbPassword"), /^DB_PASSWORD_[0-9A-F]{6}$/);
+  assert.equal(byKey.get("SYNTH_ADT_FEED_D2_URL"), "SYNTH_ADT_FEED_D2_URL");
+  const d2 = model.destinations.find((d) => d.id === "D2");
+  assert.match(d2.settings.url.env, /^SYNTH_ADT_FEED_D2_URL_[0-9A-F]{6}$/, "a connector name never equals a configuration key's");
+  const names = model.envRefs.map((e) => e.name);
+  assert.equal(new Set(names).size, names.length, `env names repeat: ${names.join(", ")}`);
+  const env = reportOf(r.project).env;
+  assert.equal(env.find((e) => e.name === byKey.get("api_token")).configKey, "api_token");
+  assert.equal(env.find((e) => e.name === "API_TOKEN").configKey, "apiToken");
+  const url = env.find((e) => e.name === d2.settings.url.env);
+  assert.equal(url.element, "D2");
+  assert.equal(url.setting, "url");
+  const md = readFileSync(join(r.project, "migration", CHANNEL, "MIGRATION-REPORT.md"), "utf8");
+  assert.ok(md.includes(`| ${byKey.get("api_token")} | configuration map key api_token |`));
+});
+
+test("a ${key} reference is listed in the report, with or without a configuration map entry", () => {
+  const r = convertWith((x) => x.replace(ARCHIVE, "<host>${archiveRoot}</host>").replace("<port>6661</port>", "<port>${listenPort}</port>"), withEntries([["listenPort", "6661"]]));
+  assert.equal(r.code, 1, r.err);
+  const env = reportOf(r.project).env;
+  const root = env.find((e) => e.name === "ARCHIVE_ROOT");
+  assert.ok(root, "ARCHIVE_ROOT is not in the report");
+  assert.equal(root.configKey, "archiveRoot");
+  assert.deepEqual(root.usedIn, ["D1 dir"]);
+  const port = env.find((e) => e.name === "LISTEN_PORT");
+  assert.deepEqual(port.usedIn, ["SRC port"]);
+  assert.equal(port.inConfigMap, true);
+  assert.equal(root.inConfigMap, false);
+  const md = readFileSync(join(r.project, "migration", CHANNEL, "MIGRATION-REPORT.md"), "utf8");
+  assert.match(md, /## Environment variables/);
+  assert.match(md, /\| ARCHIVE_ROOT \| configuration map key archiveRoot, not in the map \| D1 dir \|/);
+  assert.match(md, /deliberate/);
+});
+
+// A small seeded generator, so a failing case can be run again from its seed.
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("a marker planted as any value at any place in an export reaches no written file but the source copies", () => {
+  const WORDS = ["site", "code", "mode", "hmac", "api", "value", "name", "path", "retry", "zone", "label", "ref"];
+  const seeds = Array.from({ length: 24 }, (_, i) => 1000 + i * 7919);
+  for (const seed of seeds) {
+    const next = rng(seed);
+    const pick = (list) => list[Math.floor(next() * list.length)];
+    const alnum = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const marker = `Zq${Array.from({ length: 10 + Math.floor(next() * 8) }, () => pick([...alnum])).join("")}`;
+    const parts = Array.from({ length: 1 + Math.floor(next() * 3) }, () => pick(WORDS));
+    const key = pick([
+      () => parts.join("_"),
+      () => parts.map((p, i) => (i === 0 ? p : p[0].toUpperCase() + p.slice(1))).join(""),
+      () => parts.join(".").toUpperCase(),
+    ])();
+    const place = pick(["config", "config-ref", "source-port", "archive-dir", "results-url", "tcp-host", "new-source-property", "new-destination-property"]);
+    let edit = (x) => x;
+    let editMap = (m) => m;
+    if (place === "config") editMap = withEntries([[key, marker]]);
+    if (place === "config-ref") {
+      editMap = withEntries([[key, marker]]);
+      edit = (x) => x.replace(ARCHIVE, `<host>\${${key}}</host>`);
+    }
+    if (place === "source-port") edit = (x) => x.replace("<port>6661</port>", `<port>${marker}</port>`);
+    if (place === "archive-dir") edit = (x) => x.replace(ARCHIVE, `<host>${marker}</host>`);
+    if (place === "results-url") edit = (x) => x.replace(API_HOST, `<host>${marker}</host>`);
+    if (place === "tcp-host") {
+      edit = (x) => x.replace(API_HOST, `<host>${marker}</host>`).replace("<transportName>HTTP Sender</transportName>", "<transportName>TCP Sender</transportName>").replace("<host>" + marker + "</host>", `<remoteAddress>${marker}</remoteAddress>`);
+    }
+    if (place === "new-source-property") edit = (x) => x.replace("<processBatch>false</processBatch>", `<processBatch>false</processBatch>\n      <${key.replace(/\./g, "_")}>${marker}</${key.replace(/\./g, "_")}>`);
+    if (place === "new-destination-property") edit = (x) => x.replace("<contentType>text/plain</contentType>", `<contentType>text/plain</contentType>\n        <${key.replace(/\./g, "_")}>${marker}</${key.replace(/\./g, "_")}>`);
+    const r = convertWith(edit, editMap);
+    assert.ok(r.code === 1, `seed ${seed}, ${place}, ${key}: exit ${r.code} ${r.err}`);
+    const { project, out, err } = r;
+    assert.ok(!(out + err).includes(marker), `seed ${seed}, ${place}, ${key}: printed`);
+    for (const f of writtenOutsideSource(project)) {
+      assert.ok(!readFileSync(f, "utf8").includes(marker), `seed ${seed}, ${place}, ${key}: written to ${relative(project, f)}`);
+    }
+  }
 });

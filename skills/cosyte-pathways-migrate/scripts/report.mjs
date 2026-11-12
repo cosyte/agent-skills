@@ -137,6 +137,7 @@ export function evaluate(projectDir, model) {
     rewritePending: count("rewrite-pending"),
     notConverted: count("not-converted"),
     pendingSteps: elements.filter((e) => e.pending).length,
+    environmentVariables: (model.envRefs ?? []).length,
     unreviewedExpected: unreviewed.length,
     phiFindings: phi.findings.length,
     secretFindings: phi.secrets.length,
@@ -149,6 +150,7 @@ export function evaluate(projectDir, model) {
     channel: model.channel,
     summary,
     elements: elements.map(({ pending, ...e }) => e),
+    env: model.envRefs ?? [],
     dynamic: model.dynamic,
     unreviewedExpected: unreviewed,
     phi: phi.findings,
@@ -162,6 +164,11 @@ export function exitCode(report) {
   return EXIT.done;
 }
 
+
+const standsFor = (v) =>
+  v.configKey !== undefined
+    ? `configuration map key ${v.configKey}${v.inConfigMap ? "" : ", not in the map"}`
+    : `the ${v.setting} of ${v.element}`;
 
 const cell = (s) => String(s ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 
@@ -187,6 +194,7 @@ export function renderMarkdown(report) {
     "",
     `- Elements: ${s.elements}. Converted: ${s.converted}. Converted with a flag: ${s.convertedWithFlag}. Rewritten by the agent: ${s.rewritten}. Waiting for a rewrite: ${s.rewritePending}. Not converted: ${s.notConverted}.`,
     `- Steps still pending: ${s.pendingSteps}.${s.pendingSteps > 0 ? " check-migration exits 1 until none is." : ""}`,
+    `- Environment variables to set: ${s.environmentVariables}.`,
     `- Expected files not yet reviewed: ${s.unreviewedExpected}.`,
     `- PHI scan: ${s.phiFindings} finding(s) in ${s.filesScanned} file(s) scanned; ${s.syntheticFilesSkipped} file(s) listed as synthetic skipped.`,
     `- Credential scan: ${s.secretFindings} line(s) shaped like a secret.`,
@@ -197,12 +205,29 @@ export function renderMarkdown(report) {
     "| --- | --- | --- | --- | --- |",
     ...report.elements.map((e) => `| ${e.id} | ${e.kind} | ${cell(e.name)} | ${STATUS_WORDS[e.status]} | ${cell(capital(e.reason ?? ""))} |`),
     "",
+    "## Environment variables",
+    "",
+    "The channel reads each variable below from the environment, with no default; set each where the",
+    "channel runs. This is deliberate: the reader writes a value from the export only when it can prove",
+    "the value is not a secret (a boolean, a number, a duration, a host name, a URL with no user name,",
+    "query or fragment, or a file path), and reads every other value from the environment, whatever",
+    "its name. To keep a plain value instead, look at it in the export and write it into channel.yaml",
+    "by hand. The report names each variable, never its value.",
+    "",
+  ];
+  if (report.env.length === 0) lines.push("None.");
+  else {
+    lines.push("| Variable | Stands for | Used in |", "| --- | --- | --- |");
+    for (const v of report.env) lines.push(`| ${v.name} | ${cell(standsFor(v))} | ${cell(v.usedIn.join(", "))} |`);
+  }
+  lines.push(
+    "",
     "## Dynamic constructs",
     "",
     "Lines in the extracted scripts, under this folder, that a rewrite has to read with care. Each is",
     "named by file, line and kind; the report never quotes a script.",
     "",
-  ];
+  );
   if (report.dynamic.length === 0) lines.push("None found.");
   else {
     lines.push("| Element | File | Line | Construct |", "| --- | --- | --- | --- |");
