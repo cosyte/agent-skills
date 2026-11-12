@@ -2,7 +2,7 @@
 // reader wrote and the markers in the channel's TypeScript, plus the PHI scan of the output.
 // MIGRATION-REPORT.md is for a reader, report.json for a program; both say the same thing.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, openSync, fstatSync, closeSync, lstatSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, openSync, fstatSync, closeSync, lstatSync, constants } from "node:fs";
 import { join, relative, resolve, sep, dirname } from "node:path";
 import { capital, findSecrets, PATHWAYS_VERSION, STATUS_WORDS } from "./convert.mjs";
 
@@ -27,14 +27,20 @@ const posix = (p) => p.split(sep).join("/");
 // Every marker in one .ts file, by element id. A marker given twice keeps the first.
 export function readMarkers(file) {
   const markers = new Map();
-  let st;
+  // One open file, never through a symbolic link: its kind and its text come from one descriptor.
+  let fd;
   try {
-    st = lstatSync(file);
+    fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   } catch {
     return markers;
   }
-  if (!st.isFile()) return markers;
-  readFileSync(file, "utf8").split(/\r\n|\r|\n/).forEach((line) => {
+  let text;
+  try {
+    text = fstatSync(fd).isFile() ? readFileSync(fd, "utf8") : "";
+  } finally {
+    closeSync(fd);
+  }
+  text.split(/\r\n|\r|\n/).forEach((line) => {
     const m = MARKER_RE.exec(line);
     if (m !== null && !markers.has(m[1])) markers.set(m[1], { state: m[2], note: (m[3] ?? "").trim() });
   });
