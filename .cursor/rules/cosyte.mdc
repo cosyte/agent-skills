@@ -30,6 +30,7 @@ defects, and its PHI guidance.
 | Generating synthetic test fixtures in any of the formats above | `@cosyte/synth` | cosyte-synth |
 | Doing any of this from a terminal, in CI by exit code, or through an MCP server | `@cosyte/cli` | cosyte-cli |
 | Converting a parsed date or timestamp to ISO 8601, Temporal or an instant | `@cosyte/dates` | cosyte-dates |
+| Moving a channel exported from another integration engine to Pathways, our engine (Node.js 24) | `@cosyte/pathways` | cosyte-pathways-migrate |
 
 Common combinations:
 

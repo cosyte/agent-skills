@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A synthetic configuration map export, written from scratch for these tests. -->
+<map>
+  <entry>
+    <string>siteCode</string>
+    <example.ConfigurationProperty>
+      <value>SYNTHSITE</value>
+      <comment>The made-up site</comment>
+    </example.ConfigurationProperty>
+  </entry>
+  <entry>
+    <string>resultsApiPassword</string>
+    <example.ConfigurationProperty>
+      <value>not-a-real-secret-0000</value>
+      <comment></comment>
+    </example.ConfigurationProperty>
+  </entry>
+</map>

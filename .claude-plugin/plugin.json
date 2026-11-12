@@ -1,7 +1,7 @@
 {
   "name": "cosyte",
   "displayName": "Cosyte",
-  "description": "Skills that teach Claude when and how to use the @cosyte packages for HL7 v2, MLLP, X12, FHIR, C-CDA, DICOM, NCPDP, ASTM, terminology, HL7 v2 to FHIR conversion, de-identification, synthetic fixtures, the cosyte CLI and dates.",
+  "description": "Skills that teach Claude when and how to use the @cosyte packages for HL7 v2, MLLP, X12, FHIR, C-CDA, DICOM, NCPDP, ASTM, terminology, HL7 v2 to FHIR conversion, de-identification, synthetic fixtures, the cosyte CLI and dates, and moving a channel from another integration engine to Pathways.",
   "author": {
     "name": "Cosyte",
     "url": "https://cosyte.com"

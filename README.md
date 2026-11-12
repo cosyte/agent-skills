@@ -50,8 +50,9 @@ files.
 
 ## Status
 
-The repository holds 15 skills: one for each of the 14 `@cosyte` packages, plus the `cosyte`
-router. Each skill names the package version it was written against in its `metadata.version`,
+The repository holds 16 skills: one for each of the 14 `@cosyte` packages, the `cosyte`
+router, and `cosyte-pathways-migrate`, which moves a channel from another integration engine to
+Pathways. Each skill names the package version it was written against in its `metadata.version`,
 and when a package releases a new version, we review its skill.
 
 Not yet covered: every install method below comes from the tool's own documentation, read on
@@ -81,6 +82,7 @@ if one does not work as written.
 | [cosyte-synth](skills/cosyte-synth/SKILL.md) | `@cosyte/synth` | Synthetic test fixtures |
 | [cosyte-cli](skills/cosyte-cli/SKILL.md) | `@cosyte/cli` | The `cosyte` command and the `cosyte-mcp` MCP server |
 | [cosyte-dates](skills/cosyte-dates/SKILL.md) | `@cosyte/dates` | Dates and timestamps from the parsers |
+| [cosyte-pathways-migrate](skills/cosyte-pathways-migrate/SKILL.md) | `@cosyte/pathways` | Converting a channel exported from another integration engine into a Pathways channel |
 
 ---
 
@@ -179,6 +181,7 @@ Claude Code, Codex and Cursor. The skills do not need it.
 | --- | --- |
 | `skills/<name>/SKILL.md` | One skill, with its `name`, `description` and `metadata` frontmatter |
 | `skills/<name>/references/` | A skill's optional reference files |
+| `skills/<name>/scripts/`, `skills/<name>/tests/` | A skill's own scripts, and their tests on synthetic fixtures |
 | `.cursor/rules/<name>.mdc` | The Cursor rule generated from each skill |
 | `.claude-plugin/` | The Claude plugin and marketplace manifests |
 | `docs-content/` | The documentation pages: an overview, installation, a quickstart, guides, and one page per skill |
@@ -202,13 +205,16 @@ that:
 
 - every `SKILL.md` has frontmatter the Agent Skills spec accepts, with a name that matches its
   folder and a description that says when to use it;
-- the repository holds exactly the 15 expected skills and 15 Cursor rules, and each rule matches its
+- the repository holds exactly the 16 expected skills and 16 Cursor rules, and each rule matches its
   skill;
 - every `@cosyte` package named anywhere exists on npm (against `scripts/npm-snapshot.json`, and
   against the live registry with `--live`), and each skill's version matches the snapshot;
 - no file contains an em dash or an en dash in any spelling, and no file claims that software is
   compliant with HIPAA;
-- every relative link resolves and the plugin manifests parse.
+- every relative link resolves and the plugin manifests parse;
+- a skill's scripts run on Node 22 or later with no install step and no network: each imports only
+  `node:` modules and its own skill's files, opens no connection, runs no code from a string and
+  parses under `node --check`, and its tests run on their synthetic fixtures.
 
 To change a skill, edit `skills/<name>/SKILL.md`, then run:
 

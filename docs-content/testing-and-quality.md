@@ -21,13 +21,17 @@ uses Node's standard library only, so CI installs nothing. It checks that:
   its folder and follows the length and character rules, a `description` of at most 1,024
   characters that says when to use the skill, no key outside the specification's six, and a body
   under 500 lines;
-- the repository holds exactly the expected 15 skills and 15 Cursor rules, and each rule matches
+- the repository holds exactly the expected 16 skills and 16 Cursor rules, and each rule matches
   the one generated from its skill;
 - every `@cosyte` package named in any file exists in the committed npm snapshot, and each skill's
   `metadata.version` is that package's latest version there;
 - no file contains an em dash or an en dash in any spelling, and no file claims that software is
   compliant with HIPAA;
-- every relative link in a Markdown file resolves, and the Claude plugin manifests parse.
+- every relative link in a Markdown file resolves, and the Claude plugin manifests parse;
+- a skill's scripts run on Node 22 or later with no install step and no network: each imports only
+  `node:` modules and its own skill's files, opens no connection, runs no code from a string, parses
+  under `node --check`, and an entry script checks the Node version first. A skill with scripts has
+  tests on synthetic fixtures, and the check runs them with `node --test` and fails when none pass.
 
 A second CI step, `node scripts/check.mjs --live`, asks the npm registry about every package
 named. It fails when one does not exist, and warns when a package has released past the snapshot,

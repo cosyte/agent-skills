@@ -48,6 +48,7 @@ The routing table, as the skill gives it:
 | Generating synthetic test fixtures in any of the formats above | `@cosyte/synth` | [cosyte-synth](./cosyte-synth.md) |
 | Doing any of this from a terminal, in CI by exit code, or through an MCP server | `@cosyte/cli` | [cosyte-cli](./cosyte-cli.md) |
 | Converting a parsed date or timestamp to ISO 8601, Temporal or an instant | `@cosyte/dates` | [cosyte-dates](./cosyte-dates.md) |
+| Moving a channel exported from another integration engine to Pathways, our engine (Node.js 24) | `@cosyte/pathways` | [cosyte-pathways-migrate](./cosyte-pathways-migrate.md) |
 
 Common combinations: receive HL7 v2 over the network and read it with `cosyte-mllp`, then
 `cosyte-hl7`; convert HL7 v2 to FHIR with `cosyte-transform`, then `cosyte-fhir` to validate or

@@ -17,11 +17,16 @@
 //   5. No claim that software is compliant with HIPAA, in any spacing or hyphenation.
 //   6. Relative links in skills resolve, the Cursor rules match their skills, and the plugin
 //      manifests parse.
+//   7. A skill's scripts/ run on Node 22 or later with no install step and no network: each
+//      script imports only node: modules and files of its own skill, opens no socket, parses
+//      under `node --check`, and an entry script checks the Node version before it does anything.
+//      A skill with scripts/ has tests/, and its tests run here on their synthetic fixtures.
 //
 // The patterns in this file are assembled from pieces so that the file does not match itself.
 
 import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
-import { join, relative, dirname, extname } from "node:path";
+import { join, relative, dirname, extname, resolve, sep } from "node:path";
+import { spawnSync } from "node:child_process";
 import { ROOT, expectedRules, skillNames } from "./build-cursor-rules.mjs";
 
 const SNAPSHOT_PATH = join(ROOT, "scripts", "npm-snapshot.json");
@@ -32,13 +37,15 @@ const PACKAGES = [
   "hl7", "mllp", "x12", "fhir", "ccda", "dicom", "ncpdp", "astm",
   "terminology", "transform", "deid", "synth", "cli", "dates",
 ];
-const EXPECTED_SKILLS = ["cosyte", ...PACKAGES.map((p) => `cosyte-${p}`)].sort();
-const EXPECTED_SKILL_COUNT = 15;
+// Skills that are not one per package: each names the package it works with.
+const TASK_SKILLS = { "cosyte-pathways-migrate": "@cosyte/pathways" };
+const EXPECTED_SKILLS = ["cosyte", ...PACKAGES.map((p) => `cosyte-${p}`), ...Object.keys(TASK_SKILLS)].sort();
+const EXPECTED_SKILL_COUNT = 16;
 
 // Frontmatter keys the Agent Skills spec defines (https://agentskills.io/specification).
 const ALLOWED_KEYS = new Set(["name", "description", "license", "compatibility", "metadata", "allowed-tools"]);
 
-const TEXT_EXTENSIONS = new Set([".md", ".mdc", ".mjs", ".js", ".json", ".yml", ".yaml", ".txt", ""]);
+const TEXT_EXTENSIONS = new Set([".md", ".mdc", ".mjs", ".js", ".ts", ".json", ".yml", ".yaml", ".xml", ".txt", ""]);
 const SKIP_DIRS = new Set([".git", "node_modules"]);
 
 const args = new Set(process.argv.slice(2));
@@ -219,6 +226,10 @@ for (const file of textFiles) {
   }
 }
 for (const p of PACKAGES) if (!named.has(`@cosyte/${p}`)) fail(`@cosyte/${p} is never named in this repository`);
+for (const s of skills) {
+  const want = TASK_SKILLS[s.name];
+  if (want !== undefined && s.fm.metadata?.package !== want) fail(`${s.file}: metadata.package must be ${want}`);
+}
 
 let snapshot = readSnapshot();
 if (updateSnapshot) {
@@ -332,12 +343,131 @@ for (const manifest of [".claude-plugin/marketplace.json", ".claude-plugin/plugi
 }
 
 // ---------------------------------------------------------------------------------------------
+// 7. Skill scripts: Node 22 or later, no install step, no network, and their fixtures run.
+
+// Modules that open a connection or run code from a string. Assembled so this file does not match.
+const NETWORK_MODULES = ["http", "https", "http2", "net", "tls", "dgram", "dns", "inspector"];
+const RUNNER_MODULES = ["vm", "repl"];
+const NETWORK_GLOBALS = new RegExp("\\b(?:" + ["fet" + "ch", "WebSo" + "cket", "EventSo" + "urce", "XMLHttp" + "Request"].join("|") + ")\\s*\\(?", "u");
+const INSTALL_FILES = new Set(["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "node_modules"]);
+const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^"'`]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
+
+// Removes comments and the contents of string literals, so a word in a comment or a message is
+// not read as code. Keeps line breaks, so a reported line is the file's own.
+function codeOnly(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (c === "/" && n === "/") {
+      while (i < text.length && text[i] !== "\n") i += 1;
+    } else if (c === "/" && n === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) {
+        if (text[i] === "\n") out += "\n";
+        i += 1;
+      }
+      i += 2;
+    } else if (c === '"' || c === "'" || c === "`") {
+      out += c;
+      i += 1;
+      while (i < text.length && text[i] !== c) {
+        if (text[i] === "\\") i += 1;
+        else if (text[i] === "\n") out += "\n";
+        i += 1;
+      }
+      out += c;
+      i += 1;
+    } else {
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
+
+let scriptFilesLinted = 0;
+let skillTestRuns = 0;
+let skillTestsPassed = 0;
+for (const name of skillDirs) {
+  const skillDir = join(ROOT, "skills", name);
+  const scriptsDir = join(skillDir, "scripts");
+  const testsDir = join(skillDir, "tests");
+  for (const f of walk(skillDir)) {
+    const parts = relative(skillDir, f).split(sep);
+    for (const p of parts) if (INSTALL_FILES.has(p)) fail(`skills/${name}/${parts.join("/")}: a skill needs no install step`);
+  }
+  if (!existsSync(scriptsDir)) continue;
+  const skillText = readFileSync(join(skillDir, "SKILL.md"), "utf8");
+  const scriptFiles = walk(scriptsDir);
+  if (scriptFiles.length === 0) fail(`skills/${name}/scripts/ is empty`);
+  for (const file of scriptFiles) {
+    const rel = relative(ROOT, file);
+    if (extname(file) !== ".mjs") {
+      fail(`${rel}: a skill script is an .mjs file Node runs as it is`);
+      continue;
+    }
+    scriptFilesLinted += 1;
+    const text = readFileSync(file, "utf8");
+    const code = codeOnly(text);
+    for (const m of text.matchAll(IMPORT_RE)) {
+      const spec = m[1] ?? m[2] ?? m[3] ?? m[4];
+      if (spec.startsWith("node:")) {
+        const mod = spec.slice(5).split("/")[0];
+        if (NETWORK_MODULES.includes(mod)) fail(`${rel}: imports ${spec}; a skill script opens no connection`);
+        if (RUNNER_MODULES.includes(mod)) fail(`${rel}: imports ${spec}; a skill script runs no code from a string`);
+      } else if (spec.startsWith("./") || spec.startsWith("../")) {
+        const target = resolve(dirname(file), spec);
+        if (!target.startsWith(skillDir + sep)) fail(`${rel}: imports ${spec} from outside its skill`);
+        else if (!existsSync(target)) fail(`${rel}: imports ${spec}, which does not exist`);
+      } else {
+        fail(`${rel}: imports "${spec}"; a skill script uses node: modules and its own files only`);
+      }
+    }
+    const lines = code.split("\n");
+    lines.forEach((line, i) => {
+      if (NETWORK_GLOBALS.test(line)) fail(`${rel}:${i + 1}: a network call; a skill script opens no connection`);
+      if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(line)) fail(`${rel}:${i + 1}: runs code from a string`);
+    });
+    if (text.startsWith("#!")) {
+      if (text.split("\n")[0] !== "#!/usr/bin/env node") fail(`${rel}: an entry script starts with #!/usr/bin/env node`);
+      if (!/process\.versions\.node/.test(code)) fail(`${rel}: an entry script checks for Node 22 or later before it starts`);
+      const base = relative(skillDir, file).split(sep).join("/");
+      if (!skillText.includes(base)) fail(`${rel}: SKILL.md never names ${base}`);
+    }
+    const syntax = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
+    if (syntax.status !== 0) fail(`${rel}: node --check failed`);
+  }
+  const testFiles = existsSync(testsDir) ? walk(testsDir).filter((f) => f.endsWith(".test.mjs")) : [];
+  if (testFiles.length === 0) {
+    fail(`skills/${name}/scripts/ has no tests: add skills/${name}/tests/*.test.mjs with a synthetic fixture`);
+    continue;
+  }
+  const run = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...testFiles], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: 300_000,
+  });
+  skillTestRuns += 1;
+  const passed = Number(/^# pass (\d+)$/m.exec(run.stdout ?? "")?.[1] ?? 0);
+  const failed = Number(/^# fail (\d+)$/m.exec(run.stdout ?? "")?.[1] ?? 0);
+  skillTestsPassed += passed;
+  if (run.status !== 0 || failed > 0 || passed === 0) {
+    process.stderr.write(run.stdout ?? "");
+    process.stderr.write(run.stderr ?? "");
+    fail(`skills/${name}/tests: node --test exited ${run.status ?? run.signal}, ${passed} passed, ${failed} failed`);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Report.
 
 console.log(`skills found: ${skillDirs.length} of ${EXPECTED_SKILL_COUNT} expected, frontmatter parsed: ${skills.length}`);
 console.log(`cursor rules checked: ${ruleFiles.length}`);
 console.log(`text files scanned for dashes and claims: ${textFiles.length}`);
 console.log(`@cosyte packages named: ${named.size} (${[...named.keys()].sort().join(", ")})`);
+console.log(`skill scripts linted: ${scriptFilesLinted}, skill test suites run: ${skillTestRuns}, tests passed: ${skillTestsPassed}`);
 console.log(`npm check: ${updateSnapshot ? "registry (snapshot rewritten)" : live ? "snapshot and live registry" : `snapshot of ${snapshot?.fetched ?? "none"}`}`);
 for (const w of warnings) console.log(`warning: ${w}`);
 if (textFiles.length < EXPECTED_SKILL_COUNT * 2) fail(`only ${textFiles.length} text files scanned; the scan looks vacuous`);

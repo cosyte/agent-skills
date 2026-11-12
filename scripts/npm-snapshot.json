@@ -32,6 +32,9 @@
     "@cosyte/ncpdp": {
       "latest": "0.1.7"
     },
+    "@cosyte/pathways": {
+      "latest": "0.0.3"
+    },
     "@cosyte/synth": {
       "latest": "0.1.6"
     },

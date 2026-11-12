@@ -21,7 +21,7 @@ page.
 - **Only when it needs them**, the agent opens a skill's `references/` files. They cost nothing
   until then.
 
-Installing all 15 skills adds 15 descriptions to what an agent reads up front. If your project uses
+Installing all 16 skills adds 16 descriptions to what an agent reads up front. If your project uses
 only a few formats, copy only those skill folders, plus `cosyte` if you want the router.
 
 ## How to measure it yourself

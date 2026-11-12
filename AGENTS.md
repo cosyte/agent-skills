@@ -28,6 +28,7 @@ PHI handling.
 | Test data in any of these formats | `@cosyte/synth` | `cosyte-synth` |
 | A terminal command, a CI exit-code check, or an MCP server for these | `@cosyte/cli` | `cosyte-cli` |
 | Converting a parsed date or timestamp without guessing a timezone | `@cosyte/dates` | `cosyte-dates` |
+| Moving a channel exported from another integration engine to Pathways | `@cosyte/pathways` | `cosyte-pathways-migrate` |
 
 Rules that hold for every package:
 
@@ -41,7 +42,9 @@ Rules that hold for every package:
 
 ## Working on this repository
 
-- Each skill is `skills/<name>/SKILL.md`, with longer material in `skills/<name>/references/`.
+- Each skill is `skills/<name>/SKILL.md`, with longer material in `skills/<name>/references/`. A
+  skill's scripts live in `skills/<name>/scripts/` (Node's standard library only, no network) and
+  their tests, on synthetic fixtures, in `skills/<name>/tests/`; `check.mjs` runs them.
   Frontmatter uses only the Agent Skills spec keys (`name`, `description`, `license`, `metadata`),
   and `name` equals the folder name.
 - Facts about a package come only from its published npm README, type declarations and changelog
