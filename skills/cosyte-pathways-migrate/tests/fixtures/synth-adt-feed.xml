@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A synthetic channel export, written from scratch for these tests. Every name, host, value and
+     message in it is invented. -->
+<channel version="9.9.0">
+  <id>00000000-0000-4000-8000-000000000001</id>
+  <name>Synth ADT Feed</name>
+  <description>A made-up feed for tests.</description>
+  <revision>3</revision>
+  <sourceConnector version="9.9.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="example.connectors.tcp.TcpReceiverProperties" version="9.9.0">
+      <transmissionModeProperties class="example.MLLPModeProperties">
+        <pluginPointName>MLLP</pluginPointName>
+      </transmissionModeProperties>
+      <listenerConnectorProperties version="9.9.0">
+        <host>0.0.0.0</host>
+        <port>6661</port>
+      </listenerConnectorProperties>
+      <processBatch>false</processBatch>
+    </properties>
+    <transformer version="9.9.0">
+      <elements>
+        <example.plugins.javascriptstep.JavaScriptStep version="9.9.0">
+          <name>Set receiving app</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script>msg['MSH']['MSH.5']['MSH.5.1'] = 'SYNTHLAB';
+var site = $cfg('siteCode');
+channelMap.put('kind', 'adt');</script>
+        </example.plugins.javascriptstep.JavaScriptStep>
+        <example.plugins.mapper.MapperStep version="9.9.0">
+          <name>Patient class</name>
+          <sequenceNumber>1</sequenceNumber>
+          <enabled>true</enabled>
+          <variable>patientClass</variable>
+          <mapping>msg['PV1']['PV1.2']['PV1.2.1'].toString()</mapping>
+          <defaultValue></defaultValue>
+          <scope>CHANNEL</scope>
+        </example.plugins.mapper.MapperStep>
+        <example.plugins.xsltstep.XsltStep version="9.9.0">
+          <name>Old stylesheet</name>
+          <sequenceNumber>2</sequenceNumber>
+          <enabled>false</enabled>
+          <template>&lt;xsl:stylesheet/&gt;</template>
+        </example.plugins.xsltstep.XsltStep>
+      </elements>
+      <inboundTemplate encoding="base64">TVNIfF5+XCZ8U1lOVEhTRU5EfFNZTlRIRkFDfHx8MjAyNjAxMDEwMDAwMDB8fEFEVF5BMDF8U1lOVEgwMDAwMXxQfDIuNS4xDVBJRHwxfHxURVNUMDAwMDAxXl5eU1lOVEheTVJ8fFRFU1RQQVRJRU5UXkJFVEF8fDE5NzAwMTAxfEY=</inboundTemplate>
+      <outboundTemplate encoding="base64"></outboundTemplate>
+      <inboundDataType>HL7V2</inboundDataType>
+      <outboundDataType>HL7V2</outboundDataType>
+    </transformer>
+    <filter version="9.9.0">
+      <elements>
+        <example.plugins.javascriptrule.JavaScriptRule version="9.9.0">
+          <name>Admissions only</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <operator>NONE</operator>
+          <script>return msg['MSH']['MSH.9']['MSH.9.2'].toString() == 'A01';</script>
+        </example.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+    </filter>
+    <transportName>TCP Listener</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+  <destinationConnectors>
+    <connector version="9.9.0">
+      <metaDataId>1</metaDataId>
+      <name>Archive</name>
+      <properties class="example.connectors.file.FileDispatcherProperties" version="9.9.0">
+        <scheme>FILE</scheme>
+        <host>/var/synth/archive</host>
+        <outputPattern>${message.messageId}.hl7</outputPattern>
+        <template>${message.encodedData}</template>
+      </properties>
+      <transformer version="9.9.0">
+        <elements>
+          <example.plugins.javascriptstep.JavaScriptStep version="9.9.0">
+            <name>Stamp</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script>var stamp = eval('1 + 1');
+msg['MSH']['MSH.4']['MSH.4.1'] = 'ARCHIVE';</script>
+          </example.plugins.javascriptstep.JavaScriptStep>
+        </elements>
+        <inboundDataType>HL7V2</inboundDataType>
+        <outboundDataType>HL7V2</outboundDataType>
+      </transformer>
+      <responseTransformer version="9.9.0">
+        <elements/>
+      </responseTransformer>
+      <filter version="9.9.0">
+        <elements/>
+      </filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+    <connector version="9.9.0">
+      <metaDataId>2</metaDataId>
+      <name>Results API</name>
+      <properties class="example.connectors.http.HttpDispatcherProperties" version="9.9.0">
+        <host>https://results.example.test/api/adt</host>
+        <method>post</method>
+        <useAuthentication>true</useAuthentication>
+        <username>synth-user</username>
+        <password>${resultsApiPassword}</password>
+        <content>${message.encodedData}</content>
+        <contentType>text/plain</contentType>
+      </properties>
+      <transformer version="9.9.0">
+        <elements/>
+        <inboundDataType>HL7V2</inboundDataType>
+        <outboundDataType>HL7V2</outboundDataType>
+      </transformer>
+      <responseTransformer version="9.9.0">
+        <elements>
+          <example.plugins.javascriptstep.JavaScriptStep version="9.9.0">
+            <name>Read reply</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script>if (response.getStatusCode() != 200) { responseStatus = ERROR; }</script>
+          </example.plugins.javascriptstep.JavaScriptStep>
+        </elements>
+      </responseTransformer>
+      <filter version="9.9.0">
+        <elements/>
+      </filter>
+      <transportName>HTTP Sender</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+    <connector version="9.9.0">
+      <metaDataId>3</metaDataId>
+      <name>To Billing</name>
+      <properties class="example.connectors.vm.VmDispatcherProperties" version="9.9.0">
+        <channelId>00000000-0000-4000-8000-000000000002</channelId>
+      </properties>
+      <transportName>Channel Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+  <preprocessingScript>// Nothing to do before the message is read.
+return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>globalChannelMap.put('started', 'yes');
+return;</deployScript>
+  <undeployScript>return;</undeployScript>
+  <properties version="9.9.0">
+    <initialState>STARTED</initialState>
+  </properties>
+  <exportData>
+    <codeTemplateLibraries>
+      <codeTemplateLibrary version="9.9.0">
+        <name>Synth Helpers</name>
+        <codeTemplates>
+          <codeTemplate version="9.9.0">
+            <name>padLeft</name>
+            <properties class="example.BasicCodeTemplateProperties">
+              <type>FUNCTION</type>
+              <code>function padLeft(value, width) {
+  var text = String(value);
+  while (text.length &lt; width) text = '0' + text;
+  return text;
+}</code>
+            </properties>
+          </codeTemplate>
+        </codeTemplates>
+      </codeTemplateLibrary>
+    </codeTemplateLibraries>
+  </exportData>
+</channel>

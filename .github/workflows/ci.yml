@@ -2,7 +2,8 @@ name: CI
 
 # One job. `scripts/check.mjs` has no dependencies, so there is nothing to install.
 # The first step checks against the committed npm snapshot and never touches the network;
-# the second asks the npm registry, so a package that disappears or a new release shows up.
+# the second asks the npm registry, so a package that disappears or a new release shows up;
+# the third runs the snapshot check again on Node 22, the floor a skill's scripts promise.
 
 on:
   push:
@@ -39,3 +40,12 @@ jobs:
 
       - name: Check every named package on the npm registry (live)
         run: node scripts/check.mjs --live
+
+      # A skill's scripts promise Node 22 or later, so the check, which runs their tests, runs on
+      # Node 22 too.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Check skills and skill scripts on Node 22 (snapshot)
+        run: node scripts/check.mjs

@@ -27,7 +27,8 @@
         "cosyte-deid",
         "cosyte-synth",
         "cosyte-cli",
-        "cosyte-dates"
+        "cosyte-dates",
+        "cosyte-pathways-migrate"
       ]
     },
     { "type": "category", "label": "Troubleshooting", "items": ["troubleshooting"] },

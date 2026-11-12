@@ -30,6 +30,7 @@ All read on 2026-11-07.
 | Without a `version` field, a plugin from a Git-hosted marketplace takes its version from the commit SHA, so updates follow commits. We set no `version`. | https://code.claude.com/docs/en/plugins/loading |
 | Claude Code reads `AGENTS.md` as project instructions when the project has no `CLAUDE.md`. | https://code.claude.com/docs/en/memory |
 | `claude mcp add [options] <name> -- <command> [args...]` with `--transport stdio` registers a local MCP server. | https://code.claude.com/docs/en/mcp |
+| `${CLAUDE_SKILL_DIR}` in a skill's Markdown is replaced with the folder holding its `SKILL.md`, for a plugin skill too, so a skill names its bundled scripts by it; a skill's supporting files are referenced from `SKILL.md`, and scripts in it are run, not loaded. Read on 2026-11-12. | https://code.claude.com/docs/en/skills |
 
 ### OpenAI Codex
 
@@ -94,6 +95,7 @@ declarations of the versions in the table below: the `cosyte-synth` blocks again
 | `@cosyte/synth` | 0.1.6 | cosyte-synth | https://docs.cosyte.com/synth/intro |
 | `@cosyte/cli` | 0.1.8 | cosyte-cli | https://docs.cosyte.com/cli/intro |
 | `@cosyte/dates` | 0.1.6 | cosyte-dates | https://docs.cosyte.com/dates/intro |
+| `@cosyte/pathways` | 0.0.3 | cosyte-pathways-migrate | https://github.com/cosyte/pathways/blob/main/docs-content/intro.md, with the published package's README, CHANGELOG, `schema/channel.json` and starter template at 0.0.3 |
 
 ### Known defects
 

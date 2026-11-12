@@ -38,7 +38,8 @@ project rule per skill, and for any tool that reads `AGENTS.md` we ship a routin
 
 ## The skills
 
-There are 15 skills: one for each of the 14 `@cosyte` packages, plus the `cosyte` router. Each has
+There are 16 skills: one for each of the 14 `@cosyte` packages, the `cosyte` router, and
+`cosyte-pathways-migrate`, which moves a channel from another integration engine to Pathways. Each has
 a page here with what it does, when an agent should use it, how to install it, and an example
 prompt with its result.
 
@@ -59,6 +60,7 @@ prompt with its result.
 | [cosyte-synth](./cosyte-synth.md) | `@cosyte/synth` | Synthetic test fixtures |
 | [cosyte-cli](./cosyte-cli.md) | `@cosyte/cli` | The `cosyte` command and the `cosyte-mcp` MCP server |
 | [cosyte-dates](./cosyte-dates.md) | `@cosyte/dates` | Dates and timestamps from the parsers |
+| [cosyte-pathways-migrate](./cosyte-pathways-migrate.md) | `@cosyte/pathways` | Converting a channel exported from another integration engine into a Pathways channel |
 
 ## Where to go next
 

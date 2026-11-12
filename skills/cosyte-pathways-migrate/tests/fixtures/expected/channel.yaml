@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../../node_modules/@cosyte/pathways/schema/channel.json
+# Converted by the cosyte-pathways-migrate skill from an exported channel, for Pathways 0.0.3. It
+# is a starting point, not a proved conversion: a conversion is proved only against input and
+# output pairs your team supplies, de-identified. migration/synth-adt-feed/MIGRATION-REPORT.md
+# lists what was converted, what carries a flag and what was not converted. Every destination runs
+# dry until you remove its dryRun line.
+
+name: synth-adt-feed
+format: hl7v2
+
+source:
+  # SRC "TCP Listener": converted, with a flag. An MLLP source on 127.0.0.1 without TLS, as the
+  # skill runs it; set host and tls before it takes traffic from another machine; its port is read
+  # from SYNTH_ADT_FEED_SRC_PORT, which you set by hand: the reader writes no value from the export.
+  mllp:
+    port:
+      env: SYNTH_ADT_FEED_SRC_PORT
+    host: "127.0.0.1"
+    plaintext: true
+
+transform: ./transform.ts
+
+destinations:
+  # D1 "Archive": converted, with a flag. A file destination on the exported folder; Pathways names
+  # each file itself, so the exported file name pattern was not converted; its dir is read from
+  # SYNTH_ADT_FEED_D1_DIR, which you set by hand: the reader writes no value from the export.
+  - file:
+      dir:
+        env: SYNTH_ADT_FEED_D1_DIR
+    dryRun: true
+  # D2 "Results API": converted, with a flag. An HTTP destination that POSTs; the exported method,
+  # content type and query were not converted; its user name and password became the Authorization
+  # header, read from SYNTH_ADT_FEED_D2_AUTHORIZATION, which you set; its url is read from
+  # SYNTH_ADT_FEED_D2_URL, which you set by hand: the reader writes no value from the export.
+  - http:
+      url:
+        env: SYNTH_ADT_FEED_D2_URL
+      headers:
+        Authorization:
+          env: SYNTH_ADT_FEED_D2_AUTHORIZATION
+    dryRun: true
+  # D3 "To Billing": not converted. Pathways 0.0.3 has no channel destination: send to the other
+  # channel over a file folder or MLLP on 127.0.0.1, or wait for routing between channels in a later
+  # release.
+
+# The exported configuration map, as ctx.config. Every value but true and false is read from the
+# environment, with no default: MIGRATION-REPORT.md lists each variable to set by hand.
+config:
+  siteCode:
+    env: SITE_CODE
+  resultsApiPassword:
+    env: RESULTS_API_PASSWORD
