@@ -63,12 +63,11 @@ async function readTree(file, what) {
 }
 
 const root = await readTree(input, "the export");
-const configMap = args.values["config-map"] === undefined
-  ? undefined
-  : readConfigMapTree(await readTree(args.values["config-map"], "the configuration map"));
+const mapTree = args.values["config-map"] === undefined ? undefined : await readTree(args.values["config-map"], "the configuration map");
 
 let result;
 try {
+  const configMap = mapTree === undefined ? undefined : readConfigMapTree(mapTree);
   result = convert(root, { configMap, name: args.values.name, keepSamples: args.values["keep-samples-synthetic"] });
 } catch (err) {
   if (err instanceof ConvertRefused) refuse(err.message);

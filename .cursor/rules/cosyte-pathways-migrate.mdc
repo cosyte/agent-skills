@@ -51,13 +51,22 @@ or need the HL7 v2 API inside a transform (cosyte-hl7) or synthetic messages (co
   port, a host, a folder, a URL) and every configuration map value becomes an environment
   reference (`{ env: NAME }`) with no default, whatever its name and whatever its shape: host
   names, ports, URLs, paths, numbers and durations are withheld as a password is. The one
-  exception is a configuration map value of exactly `true` or `false`. No value is written to
+  exception is a configuration map value of exactly `true` or `false`, with no whitespace around
+  it. No value is written to
   `channel.yaml`, `model.json` or the report. A `${key}` reference never carries a default
   either. Each variable name stands for one key or setting; when two would share a name, the
   second gets a suffix. The report's Environment variables table lists every variable, what it
   stands for and where it is used, never the value: tell the user to set each one by hand from
   the export, and that a plain value goes back into `channel.yaml` only by hand, after they look
   at it. A connector property the reader does not convert is listed by its name only.
+- **Names from the export are written.** The channel, connector, step, filter rule, library and
+  template names, the configuration map keys and the transport names are written to the comments
+  in `channel.yaml`, to `transform.ts` and the `shared/*.ts` stubs, into the environment variable
+  names, and to `model.json`, `report.json` and `MIGRATION-REPORT.md`, so a person can find each
+  element. A secret someone used as a name is committed with them: tell the user to check the
+  names before committing. A data type is recorded only as one the reader knows, or as `other`.
+  The reader refuses an export in which a name holds a line break or the marker text `migrate:`,
+  so no name can pose as a progress marker.
 - **The source copies are the exception.** Each exported script is copied verbatim into
   `migration/<name>/source/`, so a password hard-coded in a script, or sample patient data, is in
   that copy. The reader writes a `.gitignore` there that keeps the folder out of version control,
@@ -160,9 +169,15 @@ It writes seeded @cosyte/synth inputs into `channels/<name>/tests/` (hl7v2 and f
 `--kind ORU^R01` picks the HL7 v2 message kind), saves the channel's current output for each as its
 expected file with `pathways test --update`, marks each new expected file unreviewed in
 `tests/.unreviewed`, puts back byte for byte any expected file a person already reviewed, then runs
-`pathways test`. It sets a placeholder for each `{ env: NAME }` the channel reads that is not set,
-for that run only, and says which: a port, `127.0.0.1` for a host, a URL on `127.0.0.1` with the
-scheme the destination's `plaintext:` line asks for, so the channel loads. Nothing connects to it.
+`pathways test`. It deliberately ignores the real settings: it sets a placeholder for every
+`{ env: NAME }` the channel reads, even when the shell already holds a value for it, and says which:
+a port, `127.0.0.1` for a host, a URL on `127.0.0.1` with the scheme the destination's `plaintext:`
+line asks for, so the channel loads. Nothing connects to it. `pathways test` gets no other variable
+from the shell but `PATH`, `HOME`, the temporary folder and their Windows counterparts, so a host,
+a port, a URL or a configuration value the team set for the real channel never reaches the
+transform. It refuses a channel that reads a variable a process uses for itself, such as `PATH`,
+`NODE_OPTIONS` or an `npm_` name; the reader never writes one, and gives a configuration key with
+such a name the prefix `MIGRATE_`.
 
 **An expected file written this way records what the channel does now, not what it should do.**
 Review each against what the other engine produced for the same input, then remove its name from

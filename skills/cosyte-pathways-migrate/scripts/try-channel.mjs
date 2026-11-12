@@ -15,6 +15,13 @@
 // expected file a person already reviewed is put back byte for byte, and only an input this run
 // wrote is listed in tests/.synthetic.
 //
+// It deliberately ignores the real settings. Every { env: NAME } in channel.yaml gets a placeholder
+// on this machine, whatever the shell holds for NAME, and the pathways command gets no other
+// variable from the shell but a short fixed list a process needs (PATH, HOME, the temporary folder
+// and their Windows counterparts). So a host, a port, a URL or a configuration value set for the
+// real channel never reaches the transform that runs here. A channel that reads a variable a
+// process uses for itself (PATH, NODE_OPTIONS, any NODE_ or npm_ name) is refused: rename it.
+//
 // Exit codes: 0 every test passed; 1 a test or a compare failed; 2 refused (the arguments, or a
 // package the project lacks).
 
@@ -74,6 +81,51 @@ const pathwaysBin = join(project, "node_modules", "@cosyte", "pathways", bin);
 
 const yaml = readFileSync(join(channelDir, "channel.yaml"), "utf8");
 const format = /^format:\s*([a-z0-9]+)\s*$/m.exec(yaml)?.[1] ?? "hl7v2";
+// The environment of the pathways command, built from nothing: a fixed list of variables a process
+// needs, copied from the shell, and a placeholder for every { env: NAME } the channel reads, whatever
+// the shell holds for NAME. The placeholder is one the setting accepts, so the channel loads: a
+// port, a host on this machine, or a URL on this machine with the scheme its plaintext line asks
+// for. Nothing connects to it.
+const PASS_THROUGH = new Set(["PATH", "PATHEXT", "HOME", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "SYSTEMROOT", "WINDIR", "COMSPEC"]);
+// The same rule as the reader's: a variable a process reads for itself is never a channel's.
+const PROCESS_VARIABLE = /^(?:NODE_.*|NPM_.*|LD_.*|DYLD_.*|PATH|PATHEXT|HOME|USER|USERNAME|USERPROFILE|SHELL|PWD|TMPDIR|TMP|TEMP|LANG|LC_.*|TZ|SYSTEMROOT|WINDIR|COMSPEC|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES|COREPACK_.*|UV_.*|SSL_CERT_.*|HTTPS?_PROXY|NO_PROXY|ALL_PROXY|CI)$/;
+const env = {};
+for (const [k, value] of Object.entries(process.env)) if (PASS_THROUGH.has(k.toUpperCase())) env[k] = value;
+const placeholders = [];
+const yamlLines = yaml.split(/\r?\n/);
+const indentOf = (line) => /^ */.exec(line)[0].length;
+function placeholderFor(at) {
+  const keyLine = yamlLines[at - 1] ?? "";
+  const key = /^\s*(?:-\s+)?([A-Za-z][A-Za-z0-9]*):\s*$/.exec(keyLine)?.[1];
+  if (key === "port") return "2575";
+  if (key === "host") return "127.0.0.1";
+  if (key === "url") {
+    // plaintext: true beside the url, in the same block, means an http:// URL.
+    const indent = indentOf(keyLine);
+    let plaintext = false;
+    for (const dir of [-1, 1]) {
+      for (let i = at - 1 + dir; i >= 0 && i < yamlLines.length; i += dir) {
+        const line = yamlLines[i];
+        if (line.trim() === "" || line.trim().startsWith("#")) continue;
+        if (indentOf(line) < indent) break;
+        if (indentOf(line) === indent && /^\s*plaintext:\s*true\s*$/.test(line)) plaintext = true;
+      }
+    }
+    return plaintext ? "http://127.0.0.1:9/" : "https://127.0.0.1:9/";
+  }
+  return "placeholder-set-by-try-channel";
+}
+yamlLines.forEach((line, at) => {
+  const name = /^\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(line)?.[1];
+  if (name === undefined) return;
+  if (PROCESS_VARIABLE.test(name.toUpperCase())) {
+    refuse(`channels/${v.channel}/channel.yaml reads ${name}, a variable a process uses for itself; give the setting another variable name`);
+  }
+  if (placeholders.includes(name)) return;
+  env[name] = placeholderFor(at);
+  placeholders.push(name);
+});
+
 const requireFromProject = createRequire(join(project, "package.json"));
 async function load(spec) {
   try {
@@ -118,42 +170,6 @@ artifacts.forEach((a, i) => {
   made.push(file);
 });
 writeList(".synthetic", [...synthetic, ...made]);
-
-// Every { env: NAME } the channel reads must be set for `pathways test` to load it. A variable that
-// is not set gets a placeholder in the test run only, and the run says which. The placeholder is
-// one the setting accepts, so the channel loads: a port, a host on this machine, or a URL on this
-// machine with the scheme its plaintext line asks for. Nothing connects to it.
-const env = { ...process.env };
-const placeholders = [];
-const yamlLines = yaml.split(/\r?\n/);
-const indentOf = (line) => /^ */.exec(line)[0].length;
-function placeholderFor(at) {
-  const keyLine = yamlLines[at - 1] ?? "";
-  const key = /^\s*(?:-\s+)?([A-Za-z][A-Za-z0-9]*):\s*$/.exec(keyLine)?.[1];
-  if (key === "port") return "2575";
-  if (key === "host") return "127.0.0.1";
-  if (key === "url") {
-    // plaintext: true beside the url, in the same block, means an http:// URL.
-    const indent = indentOf(keyLine);
-    let plaintext = false;
-    for (const dir of [-1, 1]) {
-      for (let i = at - 1 + dir; i >= 0 && i < yamlLines.length; i += dir) {
-        const line = yamlLines[i];
-        if (line.trim() === "" || line.trim().startsWith("#")) continue;
-        if (indentOf(line) < indent) break;
-        if (indentOf(line) === indent && /^\s*plaintext:\s*true\s*$/.test(line)) plaintext = true;
-      }
-    }
-    return plaintext ? "http://127.0.0.1:9/" : "https://127.0.0.1:9/";
-  }
-  return "placeholder-set-by-try-channel";
-}
-yamlLines.forEach((line, at) => {
-  const name = /^\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(line)?.[1];
-  if (name === undefined || (env[name] !== undefined && env[name] !== "")) return;
-  env[name] = placeholderFor(at);
-  if (!placeholders.includes(name)) placeholders.push(name);
-});
 
 function pathways(argv) {
   const r = spawnSync(process.execPath, [pathwaysBin, ...argv], { cwd: project, env, encoding: "utf8", timeout: 600_000 });

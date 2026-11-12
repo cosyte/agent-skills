@@ -44,7 +44,7 @@ No value from the export is written. The reader cannot tell a PIN from a port or
 a host name, so it writes none of them: every connector setting it converts and every
 configuration map value becomes an environment reference with no default, whatever its name or
 shape. Host names, ports, URLs, paths, numbers and durations are withheld too; the one exception is
-a configuration map value of exactly `true` or `false`. Each variable name stands for one key or
+a configuration map value of exactly `true` or `false`, with no whitespace around it. Each variable name stands for one key or
 setting, and the report lists every variable, what it stands for and where it is used, never the
 value: set each by hand from the export, and put a plain value back into `channel.yaml` by hand
 after you look at it. The
@@ -52,6 +52,15 @@ exception is `migration/<name>/source/`: it holds verbatim copies of the exporte
 hold hard-coded passwords and sample patient data. The reader writes a `.gitignore` there that keeps
 them out of version control, and the report lists each line shaped like a secret by file and line.
 Review those files before you commit anything from them.
+
+Names from the export are written. The channel, connector, step, filter rule, library and template
+names, the configuration map keys and the transport names go into the comments in `channel.yaml`,
+`transform.ts` and the shared code stubs, into the environment variable names, and into
+`model.json`, `report.json` and `MIGRATION-REPORT.md`, so a person can find each element. A secret
+used as a name is committed with them: check the names before you commit. The reader refuses an
+export in which a name holds a line break or the marker text `migrate:`. `try-channel.mjs`
+deliberately ignores the real settings: every variable the channel reads gets a placeholder on
+`127.0.0.1` for the test run, even when the shell holds a real value.
 
 ## When an agent should use it
 

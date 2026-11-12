@@ -8,7 +8,8 @@ import { capital, findSecrets, PATHWAYS_VERSION, STATUS_WORDS } from "./convert.
 
 export const EXIT = { done: 0, pending: 1, refused: 2, phi: 3 };
 
-const MARKER_RE = /migrate: ([A-Z0-9-]+) (pending|rewritten|dropped)(?::\s*(.*))?$/;
+// A marker is a whole line comment that starts with "migrate: ", nothing before it but indentation.
+const MARKER_RE = /^\s*\/\/ ?migrate: ([A-Z0-9-]+) (pending|rewritten|dropped)(?::\s*(.*))?$/;
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -23,16 +24,32 @@ function walk(dir, out = []) {
 
 const posix = (p) => p.split(sep).join("/");
 
-// Every marker in the channel's .ts files, by element id. A marker given twice keeps the first.
-export function readMarkers(channelDir) {
+// Every marker in one .ts file, by element id. A marker given twice keeps the first.
+export function readMarkers(file) {
   const markers = new Map();
-  for (const file of walk(channelDir).filter((f) => f.endsWith(".ts"))) {
-    readFileSync(file, "utf8").split("\n").forEach((line) => {
-      const m = MARKER_RE.exec(line.trim().replace(/^\/\/\s*/, ""));
-      if (m !== null && !markers.has(m[1])) markers.set(m[1], { state: m[2], note: (m[3] ?? "").trim() });
-    });
+  let st;
+  try {
+    st = lstatSync(file);
+  } catch {
+    return markers;
   }
+  if (!st.isFile()) return markers;
+  readFileSync(file, "utf8").split(/\r\n|\r|\n/).forEach((line) => {
+    const m = MARKER_RE.exec(line);
+    if (m !== null && !markers.has(m[1])) markers.set(m[1], { state: m[2], note: (m[3] ?? "").trim() });
+  });
   return markers;
+}
+
+// The file that holds a step's marker: its shared module for shared code, transform.ts for every
+// other step. A marker for the step anywhere else does not count.
+function markerFile(channelDir, model, element) {
+  if (element.kind === "shared-code") {
+    const module = (model.shared ?? []).find((s) => s.id === element.id)?.module;
+    if (typeof module !== "string" || !/^shared\/[a-z0-9-]+\.ts$/.test(module)) return undefined;
+    return join(channelDir, module);
+  }
+  return join(channelDir, "transform.ts");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -103,14 +120,19 @@ export function phiScan(projectDir, dirs) {
 export function evaluate(projectDir, model) {
   const name = model.channel.name;
   const channelDir = join(projectDir, "channels", name);
-  const markers = readMarkers(channelDir);
+  const byFile = new Map();
+  const markersIn = (file) => {
+    if (!byFile.has(file)) byFile.set(file, readMarkers(file));
+    return byFile.get(file);
+  };
   const elements = model.elements.map((e) => {
     const out = { ...e };
     if (!e.step) return out;
-    const marker = markers.get(e.id);
+    const file = markerFile(channelDir, model, e);
+    const marker = file === undefined ? undefined : markersIn(file).get(e.id);
     if (marker === undefined) {
       out.status = "rewrite-pending";
-      out.reason = "its marker is missing from the channel's .ts files: put the marker back, then mark it rewritten or dropped";
+      out.reason = `its marker is missing from ${e.kind === "shared-code" ? "its shared module" : "transform.ts"}: put the marker back there, then mark it rewritten or dropped`;
       out.pending = true;
     } else if (marker.state === "rewritten") {
       out.status = "rewritten";
@@ -194,9 +216,15 @@ export function renderMarkdown(report) {
     "from a host name, so it writes none of them: every connector setting it converts and every",
     "configuration map value is read from an environment variable with no default, whatever its name",
     "or shape. Host names, ports, URLs, folders, numbers and durations are withheld too. The one",
-    "exception is a configuration map value of exactly true or false. The Environment variables",
-    "section below lists each variable, the setting it stands for and where it is used: set each by",
-    "hand, from the export.",
+    "exception is a configuration map value of exactly true or false, with no whitespace around it.",
+    "The Environment variables section below lists each variable, the setting it stands for and where",
+    "it is used: set each by hand, from the export.",
+    "",
+    "**Names from the export were written.** The channel, connector, step, filter rule, library and",
+    "template names, the configuration map keys and the transport names are in the comments in",
+    "channel.yaml, in transform.ts and the shared code stubs, in the environment variable names, in",
+    "model.json and in both reports, so you can find each element. A secret used as a name would be",
+    "committed with them: check the names before you commit.",
     "",
     "## Summary",
     "",

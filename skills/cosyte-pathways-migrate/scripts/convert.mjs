@@ -39,14 +39,35 @@ export function label(raw) {
   return s.length > 80 ? `${s.slice(0, 77)}...` : s;
 }
 
+// A name from the export is written to comments, the model and the report, so a person can find
+// each element. One that holds the marker text or a line break could pose as a progress marker on a
+// line check-migration reads, so the reader refuses the export. The refusal never quotes the name.
+const MARKER_TEXT = /migrate\s*:/i;
+// A line break of any kind, or any other control character but a tab.
+const LINE_BREAK = /(?!\t)[\p{Cc}\p{Zl}\p{Zp}]/u;
+export function checkName(raw, what) {
+  if (raw === undefined) return raw;
+  const s = String(raw).trim();
+  if (LINE_BREAK.test(s)) throw new ConvertRefused(`a ${what} in the export holds a line break or another control character; rename it in the other engine and export again`);
+  if (MARKER_TEXT.test(s)) throw new ConvertRefused(`a ${what} in the export holds the marker text "migrate:"; rename it in the other engine and export again`);
+  return raw;
+}
+
+// An environment variable name a process reads for itself. A name the reader makes that equals one,
+// or starts like one, gets the MIGRATE_ prefix, so setting it can never change how Node, npm or the
+// shell behaves.
+const PROCESS_VARIABLE = /^(?:NODE_.*|NPM_.*|LD_.*|DYLD_.*|PATH|PATHEXT|HOME|USER|USERNAME|USERPROFILE|SHELL|PWD|TMPDIR|TMP|TEMP|LANG|LC_.*|TZ|SYSTEMROOT|WINDIR|COMSPEC|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES|COREPACK_.*|UV_.*|SSL_CERT_.*|HTTPS?_PROXY|NO_PROXY|ALL_PROXY|CI)$/;
+export const isProcessVariable = (name) => PROCESS_VARIABLE.test(String(name).toUpperCase());
+
 export function envName(...parts) {
-  return parts
+  const name = parts
     .map((p) => String(p).replace(/([a-z0-9])([A-Z])/g, "$1_$2"))
     .join("_")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .replace(/^(?=[0-9])/, "_");
+  return isProcessVariable(name) ? `MIGRATE_${name}` : name;
 }
 
 // No value from an export is written. Every connector setting the reader converts and every
@@ -55,8 +76,8 @@ export function envName(...parts) {
 // token from a folder, so it writes none of them. The migration report lists each variable, the
 // setting it stands for and where it is used, never the value.
 //
-// Two exceptions only. A configuration map value that is exactly the JSON boolean true or false is
-// written as it is. A field the Pathways channel schema fixes to a closed set of values could be
+// Two exceptions only. A configuration map value that is exactly the JSON boolean true or false, with
+// no whitespace around it, is written as it is. A field the Pathways channel schema fixes to a closed set of values could be
 // written too, but no setting this reader writes from an export is one: it writes port, host, dir
 // and url, each an open number or string, so that list is empty.
 const BOOLEAN = /^(?:true|false)$/;
@@ -176,6 +197,7 @@ class Builder {
   }
 
   add(entry) {
+    checkName(entry.name, "name");
     this.elements.push({ step: false, ...entry, name: entry.name === undefined ? undefined : label(entry.name) });
     return entry;
   }
@@ -240,7 +262,7 @@ class Builder {
     if (root.name !== "channel" || child(root, "sourceConnector") === undefined) {
       throw new ConvertRefused("this file is not a channel export: its root is not a channel with a sourceConnector");
     }
-    const exportedName = textOf(root, "name") ?? "";
+    const exportedName = checkName(textOf(root, "name"), "channel name") ?? "";
     const name = this.options.name ?? slug(exportedName, "");
     if (name === "" || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
       throw new ConvertRefused("the export gives no channel name that makes a Pathways channel name; pass --name");
@@ -290,17 +312,19 @@ class Builder {
   }
 
   readSource(node) {
-    const transport = label(textOf(node, "transportName") ?? "");
+    const transport = label(checkName(textOf(node, "transportName"), "transport name") ?? "");
     const props = child(node, "properties");
     const transformer = child(node, "transformer");
-    const dataType = (textOf(transformer, "inboundDataType") ?? "HL7V2").trim().toUpperCase();
-    const known = FORMATS[dataType];
+    const dataType = (checkName(textOf(transformer, "inboundDataType"), "data type") ?? "HL7V2").trim().toUpperCase();
+    // Only a data type the reader knows is recorded by name; any other is recorded as other.
+    const known = Object.hasOwn(FORMATS, dataType) ? FORMATS[dataType] : undefined;
+    const typeName = known === undefined ? "other" : dataType;
     const format = known?.format ?? "text";
     this.ext = known?.ext ?? "txt";
     if (known === undefined || dataType === "RAW") {
-      this.add({ id: "SRC-format", kind: "setting", name: `data type ${label(dataType)}`, status: "converted-with-flag", reason: "read as text: Pathways 0.0.3 has no typed format for it, so the transform gets the body as a string" });
+      this.add({ id: "SRC-format", kind: "setting", name: `data type ${typeName}`, status: "converted-with-flag", reason: "read as text: Pathways 0.0.3 has no typed format for it, so the transform gets the body as a string" });
     } else {
-      this.add({ id: "SRC-format", kind: "setting", name: `data type ${label(dataType)}`, status: "converted", reason: `format: ${format}` });
+      this.add({ id: "SRC-format", kind: "setting", name: `data type ${typeName}`, status: "converted", reason: `format: ${format}` });
     }
 
     const src = { id: "SRC", transport, kind: null, settings: {}, format };
@@ -352,8 +376,8 @@ class Builder {
 
   readDestination(node, index) {
     const id = `D${index}`;
-    const transport = label(textOf(node, "transportName") ?? "");
-    const name = textOf(node, "name") ?? `destination ${index}`;
+    const transport = label(checkName(textOf(node, "transportName"), "transport name") ?? "");
+    const name = checkName(textOf(node, "name"), "connector name") ?? `destination ${index}`;
     const props = child(node, "properties");
     const dest = { id, index, name: label(name), transport, kind: null, settings: {} };
     let status = "converted-with-flag";
@@ -453,7 +477,7 @@ class Builder {
     list.forEach((el, i) => {
       const id = `${owner}F${i + 1}`;
       const kind = kindOf(el.name);
-      const name = textOf(el, "name") ?? `rule ${i + 1}`;
+      const name = checkName(textOf(el, "name"), "filter rule name") ?? `rule ${i + 1}`;
       const enabled = (textOf(el, "enabled") ?? "true").trim() !== "false";
       let file;
       let status = "rewrite-pending";
@@ -498,7 +522,7 @@ class Builder {
     list.forEach((el, i) => {
       const id = `${owner}${prefix}${i + 1}`;
       const kind = kindOf(el.name);
-      const name = textOf(el, "name") ?? `step ${i + 1}`;
+      const name = checkName(textOf(el, "name"), "step name") ?? `step ${i + 1}`;
       const enabled = (textOf(el, "enabled") ?? "true").trim() !== "false";
       let file;
       let status = "rewrite-pending";
@@ -588,11 +612,11 @@ class Builder {
     const shared = [];
     let n = 0;
     for (const lib of children(child(exportData, "codeTemplateLibraries"), "codeTemplateLibrary")) {
-      const libName = textOf(lib, "name") ?? "library";
+      const libName = checkName(textOf(lib, "name"), "library name") ?? "library";
       for (const tpl of children(child(lib, "codeTemplates"), "codeTemplate")) {
         n += 1;
         const id = `T${n}`;
-        const tplName = textOf(tpl, "name") ?? `template ${n}`;
+        const tplName = checkName(textOf(tpl, "name"), "template name") ?? `template ${n}`;
         const props = child(tpl, "properties");
         const code = textOf(props, "code") ?? textOf(tpl, "code") ?? "";
         const base = `${slug(libName, "library", 24)}-${slug(tplName, "template", 24)}`;
@@ -749,14 +773,15 @@ export const SOURCE_GITIGNORE = [
 
 function markerLines(t, channel, indent) {
   const pad = " ".repeat(indent);
-  const head = `migrate: ${t.id} pending: ${t.what}, "${label(t.name)}"`;
+  const head = `migrate: ${t.id} pending: ${t.what}, ${JSON.stringify(label(t.name))}`;
   const rest = `${t.file ? `Source: migration/${channel}/${t.file}. ` : ""}${capital(t.reason)}.`;
   return [`${pad}// ${head}`, ...wrap(rest, 96 - indent).map((l) => `${pad}//   ${l}`)];
 }
 
 function sharedStub(id, lib, tpl, file) {
   return [
-    `// Shared code from the export's library "${label(lib)}", template "${label(tpl)}".`,
+    // The names are written as JSON strings, after fixed text, so no name can start a marker line.
+    `// Shared code from the export's library ${JSON.stringify(label(lib))}, template ${JSON.stringify(label(tpl))}.`,
     `// migrate: ${id} pending: rewrite ${file} in TypeScript here, then mark it rewritten.`,
     "// Import it from transform.ts with its .ts extension.",
     "export {};",
@@ -799,8 +824,9 @@ export function readConfigMapTree(root) {
   for (const entry of children(root, "entry")) {
     const [keyNode, valueNode] = entry.children;
     if (keyNode === undefined) continue;
-    const key = keyNode.text.trim();
-    const value = valueNode === undefined ? "" : (textOf(valueNode, "value") ?? valueNode.text).trim();
+    const key = checkName(keyNode.text, "configuration key").trim();
+    // The value is not trimmed: only exactly true or false is written as it is.
+    const value = valueNode === undefined ? "" : (textOf(valueNode, "value") ?? valueNode.text);
     map.set(key, { value });
   }
   return map;

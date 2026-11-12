@@ -2,7 +2,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, "..", "scripts", "try-channel.mjs");
 
-function run(args) {
-  const r = spawnSync(process.execPath, [script, ...args], { encoding: "utf8" });
+function run(args, env = process.env) {
+  const r = spawnSync(process.execPath, [script, ...args], { encoding: "utf8", env });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
@@ -144,4 +144,72 @@ test("gives each unset variable a placeholder its setting accepts, so the channe
   assert.ok(seen.SYNTH_AUTH.length > 0);
   assert.ok(seen.SITE_CODE.length > 0);
   assert.match(r.out, /placeholders set for this run only: .*SYNTH_SRC_PORT/);
+});
+
+// A channel that reads a host, a port, a URL and a configuration value from the environment, and a
+// stand-in pathways command that records every variable it was given.
+function projectThatRecordsEnv(extraYaml = []) {
+  const dir = projectWithStandIns();
+  writeFileSync(
+    join(dir, "channels", "synth-adt-feed", "channel.yaml"),
+    [
+      "name: synth-adt-feed",
+      "format: hl7v2",
+      "destinations:",
+      "  - http:",
+      "      url:",
+      "        env: SYNTH_ADT_FEED_D2_URL",
+      "    dryRun: true",
+      "  - tcp:",
+      "      host:",
+      "        env: SYNTH_TCP_HOST",
+      "      port:",
+      "        env: SYNTH_TCP_PORT",
+      "      plaintext: true",
+      "    dryRun: true",
+      "config:",
+      "  siteCode:",
+      "    env: SITE_CODE",
+      ...extraYaml,
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(dir, "node_modules", "@cosyte", "pathways", "bin", "pathways.mjs"),
+    'import { writeFileSync } from "node:fs";\nwriteFileSync("seen-env.json", JSON.stringify(process.env));\n',
+  );
+  return dir;
+}
+
+test("never passes a real value from the shell to the channel, even when it is set", () => {
+  const dir = projectThatRecordsEnv();
+  const real = {
+    SYNTH_ADT_FEED_D2_URL: "https://zzrealurl.example.test/in",
+    SYNTH_TCP_HOST: "zzrealhost.example.test",
+    SYNTH_TCP_PORT: "41999",
+    SITE_CODE: "ZZREALSITE",
+    ZZ_UNRELATED_SECRET: "zzunrelatedvalue",
+  };
+  const r = run(["--project", dir, "--channel", "synth-adt-feed", "--count", "1"], { ...process.env, ...real });
+  assert.equal(r.code, 0, r.out + r.err);
+  const raw = readFileSync(join(dir, "seen-env.json"), "utf8");
+  for (const value of Object.values(real)) assert.ok(!raw.includes(value), `${value} reached the child process`);
+  const seen = JSON.parse(raw);
+  assert.equal(seen.SYNTH_TCP_HOST, "127.0.0.1");
+  assert.equal(seen.SYNTH_TCP_PORT, "2575");
+  assert.match(seen.SYNTH_ADT_FEED_D2_URL, /^https:\/\/127\.0\.0\.1[:/]/);
+  assert.equal(seen.SITE_CODE, "placeholder-set-by-try-channel");
+  assert.equal(seen.ZZ_UNRELATED_SECRET, undefined);
+  assert.ok(typeof seen.PATH === "string" || typeof seen.Path === "string", "the child has no PATH");
+  assert.match(r.out, /placeholders set for this run only: .*SYNTH_TCP_HOST/);
+});
+
+test("refuses a channel that reads a process variable such as NODE_OPTIONS from the environment", () => {
+  for (const name of ["NODE_OPTIONS", "PATH", "npm_config_registry"]) {
+    const dir = projectThatRecordsEnv(["  extra:", `    env: ${name}`]);
+    const r = run(["--project", dir, "--channel", "synth-adt-feed", "--count", "1"]);
+    assert.equal(r.code, 2, `${name}: ${r.out} ${r.err}`);
+    assert.match(r.err, new RegExp(name));
+    assert.ok(!existsSync(join(dir, "seen-env.json")), `${name}: pathways ran`);
+  }
 });

@@ -8,6 +8,18 @@ host, a folder, a URL), `channel.yaml` reads it from an environment variable wit
 `{ env: <CHANNEL>_<ID>_<SETTING> }`, and the report lists the variable for the user to set by hand.
 The reader cannot tell a PIN from a port or a password from a host name, so it writes none of them.
 
+Names from the export are written: the channel, connector, step, filter rule, library and template
+names, the configuration map keys and the transport names go into the comments in `channel.yaml`,
+`transform.ts` and the `shared/*.ts` stubs, into the environment variable names, and into
+`model.json`, `report.json` and `MIGRATION-REPORT.md`. A secret used as a name is committed with
+them, so check the names before you commit. A data type is recorded only by a name in the table
+below, or as `other`. The reader refuses an export in which a name holds a line break, another
+control character but a tab, or the marker text `migrate:`.
+
+An environment variable name the reader makes that a process reads for itself (`PATH`, `HOME`,
+`TZ`, any `NODE_`, `NPM_`, `LD_` or `LC_` name, and the like) gets the prefix `MIGRATE_`: a key
+`NODE_OPTIONS` becomes `{ env: MIGRATE_NODE_OPTIONS }`.
+
 ## The conversion table
 
 ### The source
@@ -68,7 +80,7 @@ Every one of these is a step: it gets a marker, and `check-migration` exits 1 un
 | In the export | Status |
 | --- | --- |
 | The channel's name | converted: cut to lowercase letters, digits and hyphens |
-| Configuration map key | `config.<key>: { env: <KEY> }` with no default, converted with a flag, value not written, whatever the key's name and the value's shape. A value of exactly `true` or `false` is the one value written as it is, converted |
+| Configuration map key | `config.<key>: { env: <KEY> }` with no default, converted with a flag, value not written, whatever the key's name and the value's shape. A value of exactly `true` or `false`, with no whitespace around it, is the one value written as it is, converted |
 | A connector setting the reader converts (a URL, a host, a folder, a port) | `{ env: <CHANNEL>_<ID>_<SETTING> }` with no default, the element converted with a flag that names the variable, value not written |
 | Two keys or settings whose names fold to one variable (`apiToken` and `api_token`) | each gets its own variable: the first in the export keeps the name, the next gets `_` and six hexadecimal digits of a hash of what it stands for. A configuration map key always keeps its name ahead of a connector setting |
 | Any other connector property (a keystore or truststore password, a method, a file name pattern) | not converted, kind `property`, listed by the property's name, value not written |
@@ -88,9 +100,11 @@ A marker is one line comment in a `.ts` file under `channels/<name>/`:
 // migrate: S3 dropped: disabled in the export
 ```
 
-The id comes first, then `pending`, `rewritten` or `dropped`, then an optional note after a colon.
-`check-migration` reads the first marker for each id. A step with no marker is pending, so deleting
-a marker never finishes a step.
+A marker is a whole line: `//`, then `migrate: ` at the start of the comment, then the id, then
+`pending`, `rewritten` or `dropped`, then an optional note after a colon. A step's marker counts
+only in its own file: `shared/<module>.ts` for shared code, `transform.ts` for every other step.
+`check-migration` reads the first marker for each id in that file. A step with no marker there is
+pending, so deleting or moving a marker never finishes a step.
 
 ## Exit codes
 
