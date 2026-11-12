@@ -48,6 +48,9 @@ Rules that hold for every package:
   at the version in `metadata.version`, or from the docs.cosyte.com page the README links for that
   topic. Never add a capability those sources do not state.
 - `.cursor/rules/*.mdc` are generated. Edit the skill, then run `node scripts/build-cursor-rules.mjs`.
+- `docs-content/` holds the documentation pages, one per skill at `docs-content/<name>.md`, each
+  listed under Reference in `docs-content/sidebars.json`. A new skill gets a page; a change to a
+  skill's description, install line or minimal example changes its page too.
 - Run `node scripts/check.mjs` before every commit; CI runs it and `node scripts/check.mjs --live`.
   It needs Node 22 or later and no install step.
 - Writing rules: "we" voice, plain and precise, no hype, no exclamation marks. Cosyte with a

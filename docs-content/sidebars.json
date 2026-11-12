@@ -1,0 +1,37 @@
+{
+  "docs": [
+    "intro",
+    { "type": "category", "label": "Installation", "items": ["installation"] },
+    { "type": "category", "label": "Quickstart", "items": ["quickstart"] },
+    {
+      "type": "category",
+      "label": "How-to guides",
+      "items": ["add-the-routing-summary", "change-a-skill"]
+    },
+    { "type": "category", "label": "Explanation", "items": ["how-agents-use-skills"] },
+    {
+      "type": "category",
+      "label": "Reference",
+      "items": [
+        "cosyte",
+        "cosyte-hl7",
+        "cosyte-mllp",
+        "cosyte-x12",
+        "cosyte-fhir",
+        "cosyte-ccda",
+        "cosyte-dicom",
+        "cosyte-ncpdp",
+        "cosyte-astm",
+        "cosyte-terminology",
+        "cosyte-transform",
+        "cosyte-deid",
+        "cosyte-synth",
+        "cosyte-cli",
+        "cosyte-dates"
+      ]
+    },
+    { "type": "category", "label": "Troubleshooting", "items": ["troubleshooting"] },
+    "testing-and-quality",
+    "performance"
+  ]
+}
