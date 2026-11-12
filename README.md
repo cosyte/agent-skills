@@ -181,6 +181,7 @@ Claude Code, Codex and Cursor. The skills do not need it.
 | `skills/<name>/references/` | A skill's optional reference files |
 | `.cursor/rules/<name>.mdc` | The Cursor rule generated from each skill |
 | `.claude-plugin/` | The Claude plugin and marketplace manifests |
+| `docs-content/` | The documentation pages: an overview, installation, a quickstart, guides, and one page per skill |
 | [AGENTS.md](AGENTS.md) | The routing summary, then the notes for working on this repository |
 | [SOURCES.md](SOURCES.md) | Every format claim, the document it comes from, and the date we read it |
 | `scripts/build-cursor-rules.mjs` | Writes the Cursor rules from the skills |
@@ -222,7 +223,9 @@ node scripts/check.mjs
 
 ## Documentation
 
-The package documentation lives at [docs.cosyte.com](https://docs.cosyte.com/). Each skill links
+The package documentation lives at [docs.cosyte.com](https://docs.cosyte.com/). The documentation
+for these skills, with one page per skill giving what it does, when an agent should use it, how to
+install it and an example prompt, is in [docs-content](docs-content/intro.md). Each skill links
 the pages for its package; [SOURCES.md](SOURCES.md) lists the documents behind every format and
 install claim in this repository.
 
