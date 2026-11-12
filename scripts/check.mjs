@@ -18,8 +18,10 @@
 //   6. Relative links in skills resolve, the Cursor rules match their skills, and the plugin
 //      manifests parse.
 //   7. A skill's scripts/ run on Node 22 or later with no install step and no network: each
-//      script imports only node: modules and files of its own skill, opens no socket, parses
-//      under `node --check`, and an entry script checks the Node version before it does anything.
+//      script imports only node: modules and files of its own skill, by a name written in the
+//      file, opens no socket, starts no other program, parses under `node --check`, and an entry
+//      script checks the Node version before it does anything. The scripts in PROCESS_ALLOWED may
+//      start a program and import by a computed name; what they run rests on review, not on this.
 //      A skill with scripts/ has tests/, and its tests run here on their synthetic fixtures.
 //
 // The patterns in this file are assembled from pieces so that the file does not match itself.
@@ -347,7 +349,21 @@ for (const manifest of [".claude-plugin/marketplace.json", ".claude-plugin/plugi
 
 // Modules that open a connection or run code from a string. Assembled so this file does not match.
 const NETWORK_MODULES = ["http", "https", "http2", "net", "tls", "dgram", "dns", "inspector"];
-const RUNNER_MODULES = ["vm", "repl"];
+const RUNNER_MODULES = ["vm", "repl", "worker_threads"];
+// Modules that start another program, which could open a connection the lint cannot see.
+const PROCESS_MODULES = ["child_process", "cluster"];
+// The scripts that may start a program or import a module whose name is computed, and why. Every
+// other skill script may not; a new entry here is reviewed by a person.
+const PROCESS_ALLOWED = new Map([
+  [
+    "skills/cosyte-pathways-migrate/scripts/try-channel.mjs",
+    "runs the project's own pathways command and loads the project's own @cosyte/synth, so its network rule rests on review: it runs only pathways test and pathways verify --samples",
+  ],
+]);
+// import(x) or require(x) with anything but one plain string, and createRequire, which loads a
+// module by a name the lint cannot read. Run on code with string contents removed, where a plain
+// string is "" or ''.
+const COMPUTED_IMPORT = /\b(?:import|require)\s*\((?!\s*(["'])\1\s*\))|\bcreateRequire\b/;
 const NETWORK_GLOBALS = new RegExp("\\b(?:" + ["fet" + "ch", "WebSo" + "cket", "EventSo" + "urce", "XMLHttp" + "Request"].join("|") + ")\\s*\\(?", "u");
 const INSTALL_FILES = new Set(["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "node_modules"]);
 const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^"'`]*?from\s*["']([^"']+)["']|(?:^|[\s;])import\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
@@ -409,6 +425,7 @@ for (const name of skillDirs) {
       continue;
     }
     scriptFilesLinted += 1;
+    const posixRel = rel.split(sep).join("/");
     const text = readFileSync(file, "utf8");
     const code = codeOnly(text);
     for (const m of text.matchAll(IMPORT_RE)) {
@@ -417,6 +434,9 @@ for (const name of skillDirs) {
         const mod = spec.slice(5).split("/")[0];
         if (NETWORK_MODULES.includes(mod)) fail(`${rel}: imports ${spec}; a skill script opens no connection`);
         if (RUNNER_MODULES.includes(mod)) fail(`${rel}: imports ${spec}; a skill script runs no code from a string`);
+        if (PROCESS_MODULES.includes(mod) && !PROCESS_ALLOWED.has(posixRel)) {
+          fail(`${rel}: imports ${spec}; a skill script starts no other program`);
+        }
       } else if (spec.startsWith("./") || spec.startsWith("../")) {
         const target = resolve(dirname(file), spec);
         if (!target.startsWith(skillDir + sep)) fail(`${rel}: imports ${spec} from outside its skill`);
@@ -429,6 +449,9 @@ for (const name of skillDirs) {
     lines.forEach((line, i) => {
       if (NETWORK_GLOBALS.test(line)) fail(`${rel}:${i + 1}: a network call; a skill script opens no connection`);
       if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(line)) fail(`${rel}:${i + 1}: runs code from a string`);
+      if (COMPUTED_IMPORT.test(line) && !PROCESS_ALLOWED.has(posixRel)) {
+        fail(`${rel}:${i + 1}: imports a module by a computed name; a skill script imports node: modules and its own files by name`);
+      }
     });
     if (text.startsWith("#!")) {
       if (text.split("\n")[0] !== "#!/usr/bin/env node") fail(`${rel}: an entry script starts with #!/usr/bin/env node`);
@@ -458,6 +481,10 @@ for (const name of skillDirs) {
     process.stderr.write(run.stderr ?? "");
     fail(`skills/${name}/tests: node --test exited ${run.status ?? run.signal}, ${passed} passed, ${failed} failed`);
   }
+}
+
+for (const allowed of PROCESS_ALLOWED.keys()) {
+  if (!existsSync(join(ROOT, ...allowed.split("/")))) fail(`${allowed} is allowed to start a program but does not exist; remove it from PROCESS_ALLOWED`);
 }
 
 // ---------------------------------------------------------------------------------------------

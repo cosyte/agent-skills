@@ -6,7 +6,8 @@
 //   node check-migration.mjs --project <project> --channel <name>
 //
 // Exit codes: 0 every step rewritten or dropped and the scan clean; 1 a step still pending;
-// 2 refused (the arguments, or no model to read); 3 the PHI scan found something.
+// 2 refused (the arguments, no model to read, or a symbolic link where the report goes); 3 the PHI
+// scan found something.
 
 if (Number(process.versions.node.split(".")[0]) < 22) {
   process.stderr.write("check-migration: needs Node.js 22 or later\n");
@@ -17,7 +18,7 @@ const { parseArgs } = await import("node:util");
 const { readFileSync, existsSync } = await import("node:fs");
 const { join, resolve } = await import("node:path");
 const { MODEL_FORMAT } = await import("./convert.mjs");
-const { evaluate, writeReport, exitCode, printSummary, EXIT } = await import("./report.mjs");
+const { evaluate, writeReport, exitCode, printSummary, EXIT, WriteRefused } = await import("./report.mjs");
 
 function refuse(message) {
   process.stderr.write(`check-migration: ${message}\n`);
@@ -47,6 +48,11 @@ if (model.format !== MODEL_FORMAT) refuse(`migration/${channel}/model.json is no
 if (model.channel?.name !== channel) refuse(`migration/${channel}/model.json is for another channel`);
 
 const report = evaluate(root, model);
-writeReport(root, report);
+try {
+  writeReport(root, report);
+} catch (err) {
+  if (err instanceof WriteRefused) refuse(err.message);
+  throw err;
+}
 printSummary(report);
 process.exit(exitCode(report));

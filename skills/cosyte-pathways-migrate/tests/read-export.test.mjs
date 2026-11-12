@@ -51,7 +51,7 @@ test("writes the channel skeleton the golden files describe, and exits 1 while s
     const golden = readFileSync(join(fixtures, "expected", name), "utf8");
     assert.equal(readFileSync(join(channel, name), "utf8"), golden, `${name} differs from its golden file`);
   }
-  assert.ok(existsSync(join(channel, "shared", "synth-helpers-padleft.ts")));
+  assert.ok(existsSync(join(channel, "shared", "t1-synth-helpers-padleft.ts")));
   const model = JSON.parse(readFileSync(join(project, "migration", "synth-adt-feed", "model.json"), "utf8"));
   assert.equal(model.format, "cosyte-pathways-migrate/1");
   assert.equal(model.channel.name, "synth-adt-feed");

@@ -10,7 +10,8 @@
 // exported script and opens no connection.
 //
 // Exit codes: 0 every step converted; 1 written, with steps waiting for a rewrite; 2 refused (the
-// input, the arguments, or a channel folder that already exists); 3 the PHI scan found something.
+// input, the arguments, a channel folder that already exists, or a symbolic link on the way to a
+// file it would write); 3 the PHI scan found something.
 
 if (Number(process.versions.node.split(".")[0]) < 22) {
   process.stderr.write("read-export: needs Node.js 22 or later\n");
@@ -22,7 +23,7 @@ const { createReadStream, existsSync, statSync } = await import("node:fs");
 const { join, resolve } = await import("node:path");
 const { parseXmlStream, XmlRefused } = await import("./xml.mjs");
 const { convert, readConfigMapTree, ConvertRefused } = await import("./convert.mjs");
-const { evaluate, writeReport, writeFiles, exitCode, printSummary, EXIT } = await import("./report.mjs");
+const { evaluate, writeReport, writeFiles, exitCode, printSummary, EXIT, WriteRefused } = await import("./report.mjs");
 
 function refuse(message) {
   process.stderr.write(`read-export: ${message}\n`);
@@ -80,8 +81,14 @@ for (const dir of [join(project, "channels", name), join(project, "migration", n
   if (existsSync(dir)) refuse(`${dir} already exists; the reader never overwrites a channel. Move it away or pass --name`);
 }
 if (result.synthetic.length > 0) result.files.set(`channels/${name}/tests/.synthetic`, `${result.synthetic.join("\n")}\n`);
-writeFiles(project, result.files);
-const report = evaluate(project, result.model);
-writeReport(project, report);
+let report;
+try {
+  writeFiles(project, result.files);
+  report = evaluate(project, result.model);
+  writeReport(project, report);
+} catch (err) {
+  if (err instanceof WriteRefused) refuse(err.message);
+  throw err;
+}
 printSummary(report);
 process.exit(exitCode(report));

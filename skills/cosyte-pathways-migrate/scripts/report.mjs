@@ -2,9 +2,9 @@
 // reader wrote and the markers in the channel's TypeScript, plus the PHI scan of the output.
 // MIGRATION-REPORT.md is for a reader, report.json for a program; both say the same thing.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, openSync, fstatSync, closeSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, openSync, fstatSync, closeSync, lstatSync } from "node:fs";
 import { join, relative, resolve, sep, dirname } from "node:path";
-import { capital, PATHWAYS_VERSION, STATUS_WORDS } from "./convert.mjs";
+import { capital, findSecrets, PATHWAYS_VERSION, STATUS_WORDS } from "./convert.mjs";
 
 export const EXIT = { done: 0, pending: 1, refused: 2, phi: 3 };
 
@@ -50,8 +50,10 @@ const PHI_PATTERNS = [
 
 // Names listed in a tests/ folder's .synthetic file were made by @cosyte/synth or confirmed
 // synthetic by the person who ran the reader; the scan skips them and says how many it skipped.
+// The same pass looks for lines shaped like a secret (findSecrets), by file, line and kind.
 export function phiScan(projectDir, dirs) {
   const findings = [];
+  const secrets = [];
   let scanned = 0;
   let skipped = 0;
   for (const dir of dirs) {
@@ -79,6 +81,7 @@ export function phiScan(projectDir, dirs) {
         continue;
       }
       scanned += 1;
+      for (const { line, kind } of findSecrets(text)) secrets.push({ file: rel, line, kind });
       for (const { kind, re, ok } of PHI_PATTERNS) {
         for (const m of text.matchAll(re)) {
           if (ok(m[0])) continue;
@@ -89,8 +92,10 @@ export function phiScan(projectDir, dirs) {
       }
     }
   }
-  findings.sort((a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1));
-  return { findings, scanned, skipped };
+  const order = (a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1);
+  findings.sort(order);
+  secrets.sort(order);
+  return { findings, secrets, scanned, skipped };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -134,6 +139,7 @@ export function evaluate(projectDir, model) {
     pendingSteps: elements.filter((e) => e.pending).length,
     unreviewedExpected: unreviewed.length,
     phiFindings: phi.findings.length,
+    secretFindings: phi.secrets.length,
     filesScanned: phi.scanned,
     syntheticFilesSkipped: phi.skipped,
   };
@@ -146,6 +152,7 @@ export function evaluate(projectDir, model) {
     dynamic: model.dynamic,
     unreviewedExpected: unreviewed,
     phi: phi.findings,
+    secrets: phi.secrets,
   };
 }
 
@@ -171,12 +178,18 @@ export function renderMarkdown(report) {
     "reviewing every expected file. The skill ran nothing but `pathways test` and `pathways verify`",
     "on files, and never ran an exported script.",
     "",
+    `**Review before you commit.** The files under \`migration/${name}/source/\` are verbatim copies of`,
+    "the exported scripts. They can hold hard-coded passwords and sample patient data. The",
+    "`.gitignore` in that folder keeps them out of version control; read each file the credential",
+    "scan below lists, and review every file before you remove that `.gitignore` or commit one.",
+    "",
     "## Summary",
     "",
     `- Elements: ${s.elements}. Converted: ${s.converted}. Converted with a flag: ${s.convertedWithFlag}. Rewritten by the agent: ${s.rewritten}. Waiting for a rewrite: ${s.rewritePending}. Not converted: ${s.notConverted}.`,
     `- Steps still pending: ${s.pendingSteps}.${s.pendingSteps > 0 ? " check-migration exits 1 until none is." : ""}`,
     `- Expected files not yet reviewed: ${s.unreviewedExpected}.`,
     `- PHI scan: ${s.phiFindings} finding(s) in ${s.filesScanned} file(s) scanned; ${s.syntheticFilesSkipped} file(s) listed as synthetic skipped.`,
+    `- Credential scan: ${s.secretFindings} line(s) shaped like a secret.`,
     "",
     "## Elements",
     "",
@@ -201,6 +214,19 @@ export function renderMarkdown(report) {
     lines.push("Remove each value below from the output before anything else. The report names where, never what.", "", "| File | Line | Kind |", "| --- | --- | --- |");
     for (const f of report.phi) lines.push(`| ${f.file} | ${f.line} | ${f.kind} |`);
   }
+  lines.push("", "## Credential scan", "");
+  if (report.secrets.length === 0) lines.push("No line shaped like a secret.");
+  else {
+    lines.push(
+      "Lines shaped like a password, a key or a token. One in a source copy was in the export: keep it",
+      "out of the rewrite and read it from the environment. One anywhere else was written after the",
+      "reader ran: remove it. The report names where, never what.",
+      "",
+      "| File | Line | Kind |",
+      "| --- | --- | --- |",
+    );
+    for (const f of report.secrets) lines.push(`| ${f.file} | ${f.line} | ${f.kind} |`);
+  }
   if (report.unreviewedExpected.length > 0) {
     lines.push("", "## Expected files not yet reviewed", "", "Read each, compare it with what the other engine produced for the same input, and remove its name from tests/.unreviewed once it is right.", "");
     for (const f of report.unreviewedExpected) lines.push(`- tests/${f}`);
@@ -208,19 +234,50 @@ export function renderMarkdown(report) {
   return `${lines.join("\n")}\n`;
 }
 
-export function writeReport(projectDir, report) {
-  const dir = join(projectDir, "migration", report.channel.name);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
-  writeFileSync(join(dir, "MIGRATION-REPORT.md"), renderMarkdown(report));
+export class WriteRefused extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WriteRefused";
+  }
 }
 
-// Writes each file under the project, refusing any path that would land outside it.
+// The path of a file under the project, refused when it would land outside it or when any part
+// of it below the project, the file included, is a symbolic link that already exists.
+function safeTarget(root, rel) {
+  const target = resolve(root, rel);
+  if (!target.startsWith(root + sep)) throw new WriteRefused("a file path that leaves the project");
+  let at = root;
+  for (const part of relative(root, target).split(sep)) {
+    at = join(at, part);
+    let stat;
+    try {
+      stat = lstatSync(at);
+    } catch {
+      break; // nothing there yet, so nothing below it either
+    }
+    if (stat.isSymbolicLink()) {
+      throw new WriteRefused(`${posix(relative(root, at))} is a symbolic link; the skill never writes through one. Replace it with a folder or a file`);
+    }
+  }
+  return target;
+}
+
+export function writeReport(projectDir, report) {
+  const root = resolve(projectDir);
+  const dir = `migration/${report.channel.name}`;
+  const json = safeTarget(root, `${dir}/report.json`);
+  const md = safeTarget(root, `${dir}/MIGRATION-REPORT.md`);
+  mkdirSync(dirname(json), { recursive: true });
+  writeFileSync(json, `${JSON.stringify(report, null, 2)}\n`);
+  writeFileSync(md, renderMarkdown(report));
+}
+
+// Writes each file under the project. Before it writes any, it refuses a path that would land
+// outside the project or go through a symbolic link.
 export function writeFiles(projectDir, files) {
   const root = resolve(projectDir);
-  for (const [rel, text] of files) {
-    const target = resolve(root, rel);
-    if (!target.startsWith(root + sep)) throw new Error("a file path that leaves the project");
+  const targets = [...files].map(([rel, text]) => [safeTarget(root, rel), text]);
+  for (const [target, text] of targets) {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, text, { flag: "wx" });
   }

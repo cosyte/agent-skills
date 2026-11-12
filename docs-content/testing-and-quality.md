@@ -28,10 +28,13 @@ uses Node's standard library only, so CI installs nothing. It checks that:
 - no file contains an em dash or an en dash in any spelling, and no file claims that software is
   compliant with HIPAA;
 - every relative link in a Markdown file resolves, and the Claude plugin manifests parse;
-- a skill's scripts run on Node 22 or later with no install step and no network: each imports only
-  `node:` modules and its own skill's files, opens no connection, runs no code from a string, parses
-  under `node --check`, and an entry script checks the Node version first. A skill with scripts has
-  tests on synthetic fixtures, and the check runs them with `node --test` and fails when none pass.
+- a skill's scripts run on Node 22 or later with no install step: each imports only `node:`
+  modules and its own skill's files, by a name written in the file, opens no connection, starts no
+  other program, runs no code from a string, parses under `node --check`, and an entry script
+  checks the Node version first. The one script that runs a project's own `pathways` command,
+  `try-channel.mjs`, is named in `check.mjs` as the exception, so what it runs rests on review, not
+  on the check. A skill with scripts has tests on synthetic fixtures, and the check runs them with
+  `node --test` and fails when none pass.
 
 A second CI step, `node scripts/check.mjs --live`, asks the npm registry about every package
 named. It fails when one does not exist, and warns when a package has released past the snapshot,

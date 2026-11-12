@@ -8,9 +8,12 @@
 //                        [--kind ADT^A01] [--pairs <dir>]
 //
 // It uses the project's own @cosyte/pathways and @cosyte/synth and installs nothing. It never runs
-// `pathways start`, so no source listens and no destination sends: `pathways test` and
-// `pathways verify --samples` read files and open no database and no connection. It never runs an
-// exported script. An expected file a person already reviewed is put back byte for byte.
+// `pathways start`. In the Pathways 0.0.3 source at its release tag, `pathways test` runs only each
+// channel's transform on the files in tests/ and builds no source and no destination; that was not
+// confirmed from the published package, and the transform itself runs, so run this only in a
+// project whose destinations cannot reach a real system. It never runs an exported script. An
+// expected file a person already reviewed is put back byte for byte, and only an input this run
+// wrote is listed in tests/.synthetic.
 //
 // Exit codes: 0 every test passed; 1 a test or a compare failed; 2 refused (the arguments, or a
 // package the project lacks).
@@ -98,13 +101,20 @@ if (format === "hl7v2") {
 const listFile = (name) => join(testsDir, name);
 const readList = (name) => (existsSync(listFile(name)) ? readFileSync(listFile(name), "utf8").split("\n").map((s) => s.trim()).filter(Boolean) : []);
 const writeList = (name, items) => writeFileSync(listFile(name), `${[...new Set(items)].sort().join("\n")}\n`);
+// Only a file this run wrote is listed in .synthetic: a file of the same name that was already
+// there may be anything, so the PHI scan keeps reading it.
 const synthetic = readList(".synthetic");
 const made = [];
+const kept = [];
 const { mkdirSync } = await import("node:fs");
 mkdirSync(testsDir, { recursive: true });
 artifacts.forEach((a, i) => {
   const file = `synth-${seed}-${String(i + 1).padStart(3, "0")}.${ext}`;
-  if (!existsSync(join(testsDir, file))) writeFileSync(join(testsDir, file), a.content);
+  if (existsSync(join(testsDir, file))) {
+    if (!synthetic.includes(file)) kept.push(file);
+    return;
+  }
+  writeFileSync(join(testsDir, file), a.content, { flag: "wx" });
   made.push(file);
 });
 writeList(".synthetic", [...synthetic, ...made]);
@@ -146,8 +156,9 @@ let verified = 0;
 if (v.pairs !== undefined) verified = pathways(["verify", "--channel", v.channel, "--samples", resolve(v.pairs)]);
 
 process.stdout.write(
-  `try-channel: ${made.length} synthetic input(s) in channels/${v.channel}/tests; ` +
+  `try-channel: ${made.length} synthetic input(s) written in channels/${v.channel}/tests; ` +
     `${unreviewed.size} expected file(s) marked unreviewed in tests/.unreviewed.\n` +
+    (kept.length > 0 ? `try-channel: ${kept.join(", ")} was already there and is not listed as synthetic, so the PHI scan reads it.\n` : "") +
     (placeholders.length > 0 ? `try-channel: placeholders set for this run only: ${placeholders.join(", ")}.\n` : "") +
     "try-channel: an expected file written here records what the channel does now, not what it should do: review each against the other engine's output.\n",
 );

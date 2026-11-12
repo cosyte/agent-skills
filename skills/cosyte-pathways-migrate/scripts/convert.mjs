@@ -51,6 +51,52 @@ export function envName(...parts) {
 const SECRET_NAME = /pass(word|wd|phrase)?|secret|token|api[-_]?key|credential|private|pwd|auth/i;
 export const isSecretName = (name) => SECRET_NAME.test(name);
 
+// A parameter in a URL's query or a connection string that carries a credential.
+const SECRET_PARAM = /pass(word|wd|phrase)?|secret|token|key|credential|pwd|auth|sig(nature)?$|^sig$|^sas$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The kind of secret a value looks like, or null. It decides by the value's shape, whatever the
+// name of the setting that holds it: a URL with a user name or password, a credential in a query or
+// a connection string, a private key, a signed token, an authorization header, a long random token.
+export function secretShape(raw) {
+  const value = String(raw ?? "").trim();
+  if (value === "") return null;
+  if (/:\/\/[^/?#\s@]*@/.test(value)) return "url-credentials";
+  for (const m of value.matchAll(/(?:^|[?&;#\s])([A-Za-z][A-Za-z0-9 _.-]*?)\s*=\s*([^&;\s]+)/g)) {
+    if (SECRET_PARAM.test(m[1].trim())) return /:\/\//.test(value) ? "url-query-credential" : "connection-string-credential";
+  }
+  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value)) return "private-key";
+  if (/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\./.test(value)) return "signed-token";
+  if (/^(?:Bearer|Basic|Token)\s+\S{8,}/i.test(value)) return "authorization-header";
+  if (/^[A-Za-z0-9+/=_-]{32,}$/.test(value) && /[0-9]/.test(value) && /[A-Za-z]/.test(value) && !value.startsWith("/") && !UUID.test(value)) {
+    return "random-token";
+  }
+  return null;
+}
+
+// Lines of a file that look like they hold a secret, by line and kind, never the text: the shapes
+// secretShape knows, looked for in each word of a line, and a secret-named variable or property
+// given a string, as a script hard-codes one.
+const SECRET_ASSIGNMENT = /[A-Za-z_$][\w$]*(?:pass(?:word|wd|phrase)?|secret|token|api[-_]?key|pwd|credential)[\w$]*["']?\s*[:=]\s*["'][^"'\s]{3,}["']/i;
+const SECRET_CALL = /\b(?:set)?(?:pass(?:word|wd)?|secret|token|api[-_]?key)\w*\s*\(\s*["'][^"'\s]{3,}["']/i;
+export function findSecrets(text) {
+  const hits = [];
+  String(text).split(/\r\n|\r|\n/).forEach((line, i) => {
+    let kind = null;
+    if (SECRET_ASSIGNMENT.test(line) || SECRET_CALL.test(line)) kind = "secret-assignment";
+    else if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(line)) kind = "private-key";
+    else if (/\b(?:Bearer|Basic)\s+[A-Za-z0-9+/=._-]{16,}/.test(line)) kind = "authorization-header";
+    else {
+      for (const word of line.match(/[^\s"'`(),<>]+/g) ?? []) {
+        kind = secretShape(word);
+        if (kind !== null) break;
+      }
+    }
+    if (kind !== null) hits.push({ line: i + 1, kind });
+  });
+  return hits;
+}
+
 // The last part of a dotted class name, so a step type is known by its kind, not its package.
 const kindOf = (name) => name.split(".").pop();
 
@@ -106,6 +152,7 @@ class Builder {
     this.config = new Map(); // key -> { value?, env?, secret }
     this.envRefs = new Set();
     this.markers = { transform: [], shared: new Map() };
+    this.secretSettings = []; // { owner, where, env, shape }: a literal setting that looked secret
   }
 
   add(entry) {
@@ -120,12 +167,21 @@ class Builder {
     return file;
   }
 
-  // A setting's value, with ${...} turned into an environment reference.
-  setting(raw, where) {
+  // A setting's value, with ${...} turned into an environment reference. A value shaped like a
+  // secret becomes an environment reference too, named for the element and the setting, and its
+  // value is never kept: not in the model, the channel or the report.
+  setting(raw, where, owner) {
     if (raw === undefined) return undefined;
     const value = raw.trim();
     const m = VAR_RE.exec(value);
-    if (m === null) return { value };
+    if (m === null) {
+      const shape = secretShape(value);
+      if (shape === null) return { value };
+      const env = envName(this.name, owner, where);
+      this.envRefs.add(env);
+      this.secretSettings.push({ owner, where, env, shape });
+      return { env, secret: true };
+    }
     const key = m[1];
     const env = envName(key);
     this.envRefs.add(env);
@@ -180,6 +236,7 @@ class Builder {
     this.files.set(`${this.channelDir}/channel.yaml`, this.channelYaml());
     this.files.set(`${this.channelDir}/transform.ts`, this.transformTs());
     for (const [file, text] of this.markers.shared) this.files.set(`${this.channelDir}/shared/${file}`, text);
+    this.files.set(`${this.migrationDir}/source/.gitignore`, SOURCE_GITIGNORE);
     this.files.set(`${this.migrationDir}/model.json`, `${JSON.stringify(this.model, null, 2)}\n`);
     return { model: this.model, files: this.files };
   }
@@ -199,7 +256,7 @@ class Builder {
     }
 
     const src = { id: "SRC", transport, kind: null, settings: {}, format };
-    const port = this.setting(textOf(descendant(props, "listenerConnectorProperties"), "port"), "port");
+    const port = this.setting(textOf(descendant(props, "listenerConnectorProperties"), "port"), "port", "SRC");
     const mode = (textOf(descendant(props, "transmissionModeProperties"), "pluginPointName") ?? "").trim();
     let reason;
     let status = "converted-with-flag";
@@ -218,7 +275,7 @@ class Builder {
       reason = "an HTTP source on 127.0.0.1 without TLS; set tls and auth before it takes traffic from another machine";
     } else if (transport === "File Reader" && /^file$/i.test((textOf(props, "scheme") ?? "").trim())) {
       src.kind = "file";
-      src.settings = { dir: this.setting(textOf(props, "host"), "dir") };
+      src.settings = { dir: this.setting(textOf(props, "host"), "dir", "SRC") };
       reason = "a file source on the exported folder; its file name filter, sorting and after-read action were not converted";
     } else {
       src.kind = "file";
@@ -233,7 +290,9 @@ class Builder {
       src.settings.port = { value: "2575" };
       reason += "; the export gives no port, 2575 stands in";
     }
+    reason += this.secretNote("SRC");
     this.add({ id: "SRC", kind: "source", name: transport, status, reason });
+    this.readCredentials(props, "SRC", src.settings);
     if ((textOf(props, "processBatch") ?? "").trim() === "true") {
       this.add({ id: "SRC-batch", kind: "setting", name: "batch processing", status: "not-converted", reason: "Pathways 0.0.3 does not split a batch on a source: each file or body is one message" });
     }
@@ -254,11 +313,12 @@ class Builder {
     const enabled = (textOf(node, "enabled") ?? "true").trim() !== "false";
     if (transport === "File Writer" && /^file$/i.test((textOf(props, "scheme") ?? "FILE").trim())) {
       dest.kind = "file";
-      dest.settings = { dir: this.setting(textOf(props, "host"), "dir") };
+      dest.settings = { dir: this.setting(textOf(props, "host"), "dir", id) };
       reason = "a file destination on the exported folder; Pathways names each file itself, so the exported file name pattern was not converted";
     } else if (transport === "HTTP Sender") {
       dest.kind = "http";
-      dest.settings = { url: this.setting(textOf(props, "host"), "url") };
+      const rawUrl = (textOf(props, "host") ?? "").trim();
+      dest.settings = { url: this.setting(rawUrl, "url", id) };
       reason = "an HTTP destination that POSTs; the exported method, content type and query were not converted";
       if ((textOf(props, "useAuthentication") ?? "").trim() === "true") {
         const env = envName(this.name, id, "authorization");
@@ -266,7 +326,8 @@ class Builder {
         dest.settings.headers = { Authorization: { env } };
         reason += `; its user name and password became the Authorization header, read from ${env}, which you set`;
       }
-      if (/^http:/i.test(dest.settings.url?.value ?? "")) {
+      // An http:// URL read from the environment because it held a secret is still plaintext.
+      if (/^http:/i.test(dest.settings.url?.secret === true ? rawUrl : dest.settings.url?.value ?? "")) {
         dest.settings.plaintext = true;
         reason += "; an http:// URL needs plaintext: true";
       }
@@ -274,8 +335,8 @@ class Builder {
       const mode = (textOf(descendant(props, "transmissionModeProperties"), "pluginPointName") ?? "").trim();
       dest.kind = mode === "MLLP" ? "mllp" : "tcp";
       dest.settings = {
-        host: this.setting(textOf(props, "remoteAddress"), "host") ?? { value: "127.0.0.1" },
-        port: this.setting(textOf(props, "remotePort"), "port") ?? { value: "2575" },
+        host: this.setting(textOf(props, "remoteAddress"), "host", id) ?? { value: "127.0.0.1" },
+        port: this.setting(textOf(props, "remotePort"), "port", id) ?? { value: "2575" },
         plaintext: true,
       };
       reason = dest.kind === "mllp"
@@ -293,7 +354,9 @@ class Builder {
       dest.kind = null;
     }
     dest.status = status;
+    if (dest.kind !== null) reason += this.secretNote(id);
     this.add({ id, kind: "destination", name, status, reason });
+    this.readCredentials(props, id, dest.settings);
     const owner = `${id}-`;
     const where = `destination ${index}`;
     dest.filter = this.readFilter(child(node, "filter"), owner, `${where} filter`, true);
@@ -301,6 +364,45 @@ class Builder {
     dest.responseSteps = this.readSteps(child(node, "responseTransformer"), owner, `${where} response transformer`, "response");
     this.readSamples(child(node, "transformer"), id);
     return dest;
+  }
+
+  // Words for an element's reason naming each setting that became an environment reference
+  // because its value looked like a secret.
+  secretNote(owner) {
+    return this.secretSettings
+      .filter((s) => s.owner === owner)
+      .map((s) => `; its ${s.where} looked like it holds a secret (${s.shape}), so it is read from ${s.env}, which you set to the exported value; that value was not written`)
+      .join("");
+  }
+
+  // Each property of a connector named like a secret or shaped like one that the reader does not
+  // convert (a keystore or truststore password, a token, a key) is listed by the property's name,
+  // its value never written.
+  readCredentials(props, owner, settings) {
+    if (props === undefined) return;
+    const converted = new Set(["host", "port", "remoteAddress", "remotePort", "username", "useAuthentication"]);
+    let n = 0;
+    const visit = (node) => {
+      for (const c of node.children) {
+        if (c.children.length > 0) {
+          visit(c);
+          continue;
+        }
+        const text = c.text.trim();
+        if (converted.has(c.name) || text === "" || VAR_RE.test(text)) continue;
+        if (c.name === "password" && settings.headers?.Authorization !== undefined) continue;
+        if (!isSecretName(c.name) && secretShape(text) === null) continue;
+        n += 1;
+        this.add({
+          id: `${owner}-K${n}`,
+          kind: "credential",
+          name: c.name,
+          status: "not-converted",
+          reason: "a credential in the connector's properties: its value was not written. Pathways reads a credential from the environment; if the converted connector needs it, add it to channel.yaml as { env: NAME } by hand",
+        });
+      }
+    };
+    visit(props);
   }
 
   readFilter(node, owner, where, perDestination = false) {
@@ -452,7 +554,9 @@ class Builder {
         const code = textOf(props, "code") ?? textOf(tpl, "code") ?? "";
         const base = `${slug(libName, "library", 24)}-${slug(tplName, "template", 24)}`;
         const file = this.sourceFile(id, base, "js", code);
-        const module = `${base}.ts`;
+        // The element id makes the module name unique, as it does for the source files: two
+        // templates with the same name, or with names the same once cut, never share a module.
+        const module = `${id.toLowerCase()}-${base}.ts`;
         const reason = `shared code: rewrite it in TypeScript in shared/${module} and import it from transform.ts`;
         this.add({ id, kind: "shared-code", name: `${libName} / ${tplName}`, status: "rewrite-pending", reason, step: true, file: `${this.migrationDir}/${file}` });
         this.markers.shared.set(module, sharedStub(id, libName, tplName, `${this.migrationDir}/${file}`));
@@ -477,7 +581,8 @@ class Builder {
         const env = envName(key);
         this.envRefs.add(env);
         config.push({ key, env, secret: true });
-        this.add({ id, kind: "config", name: key, status: "converted-with-flag", reason: `a secret: ctx.config.${key} reads it from ${env}, which you set where the engine runs; its value was not written` });
+        const why = entry.shape ? `a value shaped like a secret (${entry.shape})` : "a secret by its name";
+        this.add({ id, kind: "config", name: key, status: "converted-with-flag", reason: `${why}: ctx.config.${key} reads it from ${env}, which you set where the engine runs; its value was not written` });
       } else {
         config.push({ key, value: entry.value, secret: false });
         this.add({ id, kind: "config", name: key, status: "converted", reason: `kept as ctx.config.${key}, the value as exported` });
@@ -588,6 +693,17 @@ class Builder {
   }
 }
 
+// The source copies are verbatim, so they can hold a hard-coded password or a sample patient's
+// data. Git ignores them until a person has read them and chooses to commit one.
+export const SOURCE_GITIGNORE = [
+  "# Verbatim copies of the exported scripts, written by the cosyte-pathways-migrate skill. They can",
+  "# hold hard-coded passwords and sample patient data, so git ignores them. Read MIGRATION-REPORT.md",
+  "# and review each file before you remove this file or commit one of them.",
+  "*",
+  "!.gitignore",
+  "",
+].join("\n");
+
 function markerLines(t, channel, indent) {
   const pad = " ".repeat(indent);
   const head = `migrate: ${t.id} pending: ${t.what}, "${label(t.name)}"`;
@@ -631,7 +747,8 @@ export function wrap(text, width) {
 }
 
 // Reads a configuration map export: entries of a key and a value, in order. A value whose key
-// looks like a secret is kept in memory only, to be replaced by an environment reference.
+// looks like a secret, or that is shaped like one, is kept in memory only, to be replaced by an
+// environment reference.
 export function readConfigMapTree(root) {
   const map = new Map();
   for (const entry of children(root, "entry")) {
@@ -639,7 +756,8 @@ export function readConfigMapTree(root) {
     if (keyNode === undefined) continue;
     const key = keyNode.text.trim();
     const value = valueNode === undefined ? "" : (textOf(valueNode, "value") ?? valueNode.text).trim();
-    map.set(key, { value, secret: isSecretName(key) });
+    const shape = secretShape(value);
+    map.set(key, { value, secret: isSecretName(key) || shape !== null, shape });
   }
   return map;
 }

@@ -25,15 +25,28 @@ Three scripts do the deterministic work, and the agent does the rewriting:
   migration report as Markdown and JSON).
 - The agent rewrites each script step in TypeScript, never running one, and marks it rewritten or
   dropped.
-- `check-migration.mjs` runs the PHI scan on the output, writes the report again, and exits
-  non-zero while any step is pending.
+- `check-migration.mjs` runs the PHI scan and the credential scan on the output, writes the
+  report again, and exits non-zero while any step is pending. Both scans are pattern checks, a
+  floor and not a proof: they look for the shapes of identifiers and secrets, and a clean scan
+  does not prove the output holds no PHI or no secret.
 - `try-channel.mjs` writes @cosyte/synth inputs into the channel's tests, saves its current output
   as expected files marked unreviewed, and runs `pathways test`, and with the team's de-identified
   pairs, `pathways verify --samples`.
 
 The result is a starting point, not a proved conversion: a conversion is proved only against input
 and output pairs a team supplies, de-identified. Every destination is written to run dry and every
-source listens on `127.0.0.1`, and the skill runs a channel on files only.
+source listens on `127.0.0.1`, and the skill runs a channel on files only. We have read in the
+Pathways 0.0.3 source that `pathways test` runs only the transform and builds no destination, but
+have not confirmed it from the published package, so run `try-channel.mjs` only in a project whose
+destinations cannot reach a real system.
+
+A setting or configuration map value named like a secret or shaped like one (a URL with a user
+name or password, a credential in a query or a connection string, a key, a token) becomes an
+environment reference, and its value is not written to the channel, the model or the report. The
+exception is `migration/<name>/source/`: it holds verbatim copies of the exported scripts, which can
+hold hard-coded passwords and sample patient data. The reader writes a `.gitignore` there that keeps
+them out of version control, and the report lists each line shaped like a secret by file and line.
+Review those files before you commit anything from them.
 
 ## When an agent should use it
 

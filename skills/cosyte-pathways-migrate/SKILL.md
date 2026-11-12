@@ -41,14 +41,28 @@ or need the HL7 v2 API inside a transform (cosyte-hl7) or synthetic messages (co
 - **Never run an exported script.** Not in Node, not in a sandbox, not "to see what it does".
   Read it as text and rewrite it. The scripts here never evaluate one: they copy each out as a file.
 - **Files and loopback only.** Run a converted channel only through `pathways test` and
-  `pathways verify --samples`, which read files and open no connection. Never `pathways start` a
-  converted channel against a real endpoint. Every destination is written with `dryRun: true`, and
-  every source listens on `127.0.0.1`; only the team removes those, when it decides to.
+  `pathways verify --samples`. Never `pathways start` a converted channel against a real endpoint.
+  Every destination is written with `dryRun: true`, and every source listens on `127.0.0.1`; only
+  the team removes those, when it decides to. In the source of Pathways 0.0.3 at its release tag,
+  `pathways test` runs only each channel's transform on the files in `tests/`: it builds no source
+  and no destination, so `dryRun` never comes into it. We have not confirmed that from the
+  published npm package, and the transform you write runs, so run try-channel only in a project
+  whose destinations cannot reach a real system.
 - **No real patient data.** Never paste a message from a live system into the conversation, a test
   or a fixture. Make inputs with @cosyte/synth. The reader drops every sample message embedded in the
   export unless the person running it passes `--keep-samples-synthetic`, confirming it is synthetic.
-- **No secret in a file.** A password or a key becomes an environment reference (`{ env: NAME }`);
-  its value is never written. Tell the user which variables to set.
+- **No secret in a file the reader converts.** A setting or a configuration map value that is
+  named like a secret or shaped like one (a URL with a user name or password, a credential in a
+  query or a connection string, a key, a token) becomes an environment reference
+  (`{ env: NAME }`), and its value is not written to `channel.yaml`, `model.json` or the report. A
+  keystore or truststore password or another credential property the reader does not convert is
+  listed by name only. Tell the user which variables to set.
+- **The source copies are the exception.** Each exported script is copied verbatim into
+  `migration/<name>/source/`, so a password hard-coded in a script, or sample patient data, is in
+  that copy. The reader writes a `.gitignore` there that keeps the folder out of version control,
+  and the report's credential scan lists each line shaped like a secret by file and line. Tell the
+  user to review those files before committing anything from them, and never carry a hard-coded
+  secret into the rewrite: read it from `ctx.config` with an `env` reference.
 - **The export stays the team's.** Do not copy an export, or anything from the other engine's
   documentation, into this repository or a public issue.
 
@@ -65,7 +79,8 @@ node ${CLAUDE_SKILL_DIR}/scripts/read-export.mjs path/to/export.xml --out . \
 
 - `--config-map` (optional) reads the engine's configuration map export into the channel's
   `config:` block, read in the transform as `ctx.config`. A key whose name looks like a secret
-  (password, token, key, credential, auth) becomes `{ env: NAME }` and its value is dropped.
+  (password, token, key, credential, auth), or whose value is shaped like one, becomes
+  `{ env: NAME }` and its value is dropped.
 - `--name <channel>` sets the channel name when the exported name does not make one.
 - `--keep-samples-synthetic` keeps the sample messages embedded in the export as test inputs. Pass
   it only when the user confirms they are synthetic.
@@ -76,14 +91,14 @@ It writes:
 | --- | --- |
 | `channels/<name>/channel.yaml` | The source, the destinations (each `dryRun: true`) and `config:`, with a comment on each saying what was converted and what was not |
 | `channels/<name>/transform.ts` | A skeleton with one marker per step, filter rule and script |
-| `channels/<name>/shared/*.ts` | One stub module per shared code template |
-| `migration/<name>/source/` | Each exported script as a `.js` file, and each mapping or rule as `.json`, for you to read |
+| `channels/<name>/shared/*.ts` | One stub module per shared code template, named `t<n>-<library>-<template>.ts` |
+| `migration/<name>/source/` | Each exported script as a `.js` file, and each mapping or rule as `.json`, verbatim, for you to read; a `.gitignore` keeps them out of version control |
 | `migration/<name>/model.json` | The normalised model of the export |
-| `migration/<name>/MIGRATION-REPORT.md`, `report.json` | Every element and its status, the dynamic constructs by file and line, and the PHI scan |
+| `migration/<name>/MIGRATION-REPORT.md`, `report.json` | Every element and its status, the dynamic constructs by file and line, the PHI scan and the credential scan |
 
 It refuses (exit 2) an export with a DOCTYPE or any entity other than the five XML predefines, one
-over its size, depth or count limits, a file that is not a channel export, and a channel folder
-that already exists. A name from the export never becomes a path: it is cut to lowercase letters,
+over its size, depth or count limits, a file that is not a channel export, a channel folder that
+already exists, and a symbolic link on the way to any file it would write. A name from the export never becomes a path: it is cut to lowercase letters,
 digits and hyphens.
 
 ### 2. Read the report
@@ -159,7 +174,9 @@ HL7 v2 field path, JSON pointer or byte offset, never by value.
 
 Run `npx pathways validate` in the project. Then tell the user: the report's counts, what is not
 converted and why, which environment variables to set, which expected files still need review,
-and that the conversion is a starting point until the team's own de-identified pairs pass.
+which files the credential scan lists, that `migration/<name>/source/` holds verbatim copies to
+review before anything from it is committed, and that the conversion is a starting point until
+the team's own de-identified pairs pass.
 
 ## Exit codes
 
@@ -192,6 +209,9 @@ and that the conversion is a starting point until the team's own de-identified p
 - **The PHI scan is a floor.** It looks for the shapes of SSNs, email addresses outside example
   domains, phone numbers outside 555-01xx and HL7 v2 PID segments with a name, and skips files
   listed in a `tests/.synthetic` file. A clean scan does not prove the output holds no PHI.
+- **The credential scan is a floor too.** It looks for the shapes of a hard-coded password, a URL
+  with credentials, a key and a token, and lists each line it finds without quoting it; it does
+  not change the exit code. A clean scan does not prove a file holds no secret.
 - try-channel makes inputs for `hl7v2` and `fhir` channels only; write synthetic inputs for
   another format by hand.
 
@@ -202,6 +222,8 @@ and that the conversion is a starting point until the team's own de-identified p
 - The scripts print counts, ids, names of steps and codes, never a message or a script's text. The
   report names a dynamic construct or a PHI finding by file and line, never the value.
 - The reader drops every embedded sample message by default, and the PHI scan runs on the output.
+- The verbatim copies under `migration/<name>/source/` can hold whatever the exported scripts
+  hold, sample patient data included. They stay out of version control until someone reviews them.
 - Test inputs come from @cosyte/synth; the team's real pairs are de-identified before they are
   used, and never committed with a real value.
 

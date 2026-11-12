@@ -212,9 +212,11 @@ that:
 - no file contains an em dash or an en dash in any spelling, and no file claims that software is
   compliant with HIPAA;
 - every relative link resolves and the plugin manifests parse;
-- a skill's scripts run on Node 22 or later with no install step and no network: each imports only
-  `node:` modules and its own skill's files, opens no connection, runs no code from a string and
-  parses under `node --check`, and its tests run on their synthetic fixtures.
+- a skill's scripts run on Node 22 or later with no install step: each imports only `node:`
+  modules and its own skill's files, by a name written in the file, opens no connection, starts no
+  other program, runs no code from a string and parses under `node --check`, and its tests run on
+  their synthetic fixtures. The one script that runs a project's own `pathways` command,
+  `try-channel.mjs`, is named in `check.mjs` as the exception; what it runs rests on review.
 
 To change a skill, edit `skills/<name>/SKILL.md`, then run:
 
