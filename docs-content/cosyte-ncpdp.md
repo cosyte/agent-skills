@@ -54,8 +54,9 @@ parse through the same entry point.
 
 ```text
 Build a synthetic NCPDP Telecom D.0 B1 billing claim, serialize it, then parse it back
-and print the cardholder ID, the prescription number, the product ID and qualifier,
-and the quantity dispensed.
+and read the cardholder ID and the prescription number into variables without printing
+them. Print the product ID and qualifier, the quantity dispensed, and whether the
+cardholder ID and prescription number are present.
 ```
 
 ## Result

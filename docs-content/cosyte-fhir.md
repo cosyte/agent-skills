@@ -53,7 +53,7 @@ Everything ships from one entry point; there are no subpath imports.
 ```text
 Parse this synthetic FHIR Observation, keep the 120.0 exactly as written, refuse to
 summarize it if its status or a modifier makes that unsafe, and validate it against R4.
-Print the value with its UCUM code.
+Compare the value, without printing it, and print its UCUM code.
 
 { "resourceType": "Observation", "id": "syn-0001", "status": "final",
   "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },
