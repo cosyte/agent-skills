@@ -94,7 +94,7 @@ test("a user name and password in a connector URL become an environment referenc
   const yaml = yamlOf(r.project);
   assert.match(yaml, /url:\n\s+env: SYNTH_ADT_FEED_D2_URL\n/);
   const d2 = modelOf(r.project).destinations.find((d) => d.id === "D2");
-  assert.deepEqual(d2.settings.url, { env: "SYNTH_ADT_FEED_D2_URL", secret: true });
+  assert.deepEqual(d2.settings.url, { env: "SYNTH_ADT_FEED_D2_URL" });
   const flagged = reportOf(r.project).elements.find((e) => e.id === "D2");
   assert.match(flagged.reason, /SYNTH_ADT_FEED_D2_URL/);
 });
@@ -149,9 +149,10 @@ test("a keystore or truststore password in a connector is never written, and the
   assertNowhere(r, ts);
   assertNowhere(r, JWT_HEAD);
   const elements = reportOf(r.project).elements;
-  const listed = elements.filter((e) => e.kind === "credential");
+  const listed = elements.filter((e) => ["apiToken", "keyStorePassword", "trustStorePassword"].includes(e.name));
   assert.deepEqual(listed.map((e) => e.name).sort(), ["apiToken", "keyStorePassword", "trustStorePassword"]);
   for (const e of listed) {
+    assert.equal(e.kind, "property");
     assert.equal(e.status, "not-converted");
     assert.match(e.reason, /value was not written/);
   }
@@ -264,14 +265,92 @@ test("values no name or shape rule catches are read from the environment all the
   assert.match(yaml, /  session:\n    env: SESSION\n/);
 });
 
-test("a value proved harmless by the closed allow rule is kept as it is", () => {
-  const values = { retries: "3", enabled: "true", timeout: "30s", archiveDir: "/var/synth/out", lookup: "https://lookup.example.test/v1", relay: "relay.example.test" };
-  const r = convertWith((x) => x, withEntries(Object.entries(values)));
+// Values a rule by name or by shape lets through: a PIN under a name with pin in it, a password
+// under a short name, an account number, passwords that are valid host names, paths whose last
+// part is the secret, a webhook URL holding short tokens, a code and durations shaped like numbers,
+// and TRUE spelled in capitals. The reader cannot tell any of them from a harmless value, so it
+// writes none of them.
+const UNTELLABLE = [
+  ["pinCode", "4821", "PIN_CODE"],
+  ["pin_code", "4822", "PIN_CODE_"],
+  ["pinNumber", "4823", "PIN_NUMBER"],
+  ["dbPw", "hunter2.com", "DB_PW"],
+  ["smtpLogin", "correct.horse.battery", "SMTP_LOGIN"],
+  ["accountNumber", "123456789", "ACCOUNT_NUMBER"],
+  ["mfa", "123456", "MFA"],
+  ["vaultFile", "/dev/shm/s3cr3t", "VAULT_FILE"],
+  ["svcHome", "C:\\Users\\svc\\Pa55w0rd", "SVC_HOME"],
+  ["hookUrl", "https://hooks.example.test/services/T0AB/B0CD/xY7zQ3", "HOOK_URL"],
+  ["waitFor", "1234 s", "WAIT_FOR"],
+  ["holdFor", "PT1234567S", "HOLD_FOR"],
+  ["flagValue", "TRUE", "FLAG_VALUE"],
+];
+
+test("no configuration map value is written, whatever its key or its shape", () => {
+  const r = convertWith((x) => x, withEntries(UNTELLABLE.map(([k, v]) => [k, v])));
+  assert.equal(r.code, 1, r.err);
   const yaml = yamlOf(r.project);
-  for (const [k, v] of Object.entries(values)) assert.ok(yaml.includes(`  ${k}: ${JSON.stringify(v)}\n`), `${k} was not kept`);
-  assert.match(yaml, /dir: "\/var\/synth\/archive"/);
-  assert.match(yaml, /url: "https:\/\/results\.example\.test\/api\/adt"/);
-  assert.match(yaml, /port: 6661/);
+  const model = modelOf(r.project);
+  const env = reportOf(r.project).env;
+  for (const [k, v, name] of UNTELLABLE) {
+    assert.ok(!yaml.includes(JSON.stringify(v)), `${k}: its value was written to channel.yaml`);
+    if (v !== "TRUE") assertNowhere(r, v);
+    const entry = model.config.find((c) => c.key === k);
+    assert.ok(entry.env.startsWith(name), `${k} is read from ${entry.env}`);
+    assert.equal(entry.value, undefined, `${k}: its value is in model.json`);
+    assert.match(yaml, new RegExp(`  ${k}:\\n    env: ${entry.env}\\n`), `${k} is not an environment reference`);
+    assert.equal(env.find((e) => e.name === entry.env).configKey, k);
+  }
+  assert.doesNotMatch(yaml, /^\s*default:/m, "an environment reference carries a default");
+});
+
+test("no connector setting is written: a port, a host, a folder and a URL are all read from the environment", () => {
+  const r = convertWith((x) => x);
+  assert.equal(r.code, 1, r.err);
+  const yaml = yamlOf(r.project);
+  for (const v of ["6661", "/var/synth/archive", "results.example.test", "synth-user", "0.0.0.0"]) assertNowhere(r, v);
+  assert.match(yaml, /  mllp:\n    port:\n      env: SYNTH_ADT_FEED_SRC_PORT\n/);
+  assert.match(yaml, /  - file:\n      dir:\n        env: SYNTH_ADT_FEED_D1_DIR\n/);
+  assert.match(yaml, /  - http:\n      url:\n        env: SYNTH_ADT_FEED_D2_URL\n/);
+  const env = reportOf(r.project).env;
+  const port = env.find((e) => e.name === "SYNTH_ADT_FEED_SRC_PORT");
+  assert.equal(port.element, "SRC");
+  assert.equal(port.setting, "port");
+  assert.deepEqual(port.usedIn, ["SRC port"]);
+  const md = readFileSync(join(r.project, "migration", CHANNEL, "MIGRATION-REPORT.md"), "utf8");
+  assert.ok(md.includes("| SYNTH_ADT_FEED_SRC_PORT | the port of SRC | SRC port |"));
+  const top = md.split("## Summary")[0];
+  assert.match(top, /cannot\s+tell\s+a\s+PIN\s+from\s+a\s+port/);
+  assert.match(top, /password\s+from\s+a\s+host\s+name/);
+});
+
+test("a TCP destination's host and port and a file source's folder are read from the environment", () => {
+  const tcp = convertWith((x) =>
+    x
+      .replace(API_HOST, "<remoteAddress>relay.example.test</remoteAddress>\n        <remotePort>7771</remotePort>")
+      .replace("<transportName>HTTP Sender</transportName>", "<transportName>TCP Sender</transportName>"),
+  );
+  assert.equal(tcp.code, 1, tcp.err);
+  for (const v of ["relay.example.test", "7771"]) assertNowhere(tcp, v);
+  assert.match(yamlOf(tcp.project), /  - tcp:\n      host:\n        env: SYNTH_ADT_FEED_D2_HOST\n      port:\n        env: SYNTH_ADT_FEED_D2_PORT\n/);
+  const file = convertWith((x) =>
+    x
+      .replace(/<properties class="example\.connectors\.tcp\.TcpReceiverProperties"[\s\S]*?<\/properties>/, '<properties class="example.connectors.file.FileReceiverProperties"><scheme>FILE</scheme><host>/srv/synth/inbox</host></properties>')
+      .replace("<transportName>TCP Listener</transportName>", "<transportName>File Reader</transportName>"),
+  );
+  assert.equal(file.code, 1, file.err);
+  assertNowhere(file, "/srv/synth/inbox");
+  assert.match(yamlOf(file.project), /  file:\n    dir:\n      env: SYNTH_ADT_FEED_SRC_DIR\n/);
+});
+
+test("only the booleans true and false are written as they are", () => {
+  const r = convertWith((x) => x, withEntries([["archiveOn", "true"], ["traceOn", "false"], ["shout", "TRUE"], ["blank", ""]]));
+  assert.equal(r.code, 1, r.err);
+  const yaml = yamlOf(r.project);
+  assert.match(yaml, /  archiveOn: "true"\n/);
+  assert.match(yaml, /  traceOn: "false"\n/);
+  assert.match(yaml, /  shout:\n    env: SHOUT\n/);
+  assert.match(yaml, /  blank:\n    env: BLANK\n/);
 });
 
 test("two keys that fold to one environment name each get a name of their own", () => {
@@ -310,7 +389,8 @@ test("a ${key} reference is listed in the report, with or without a configuratio
   assert.equal(root.configKey, "archiveRoot");
   assert.deepEqual(root.usedIn, ["D1 dir"]);
   const port = env.find((e) => e.name === "LISTEN_PORT");
-  assert.deepEqual(port.usedIn, ["SRC port"]);
+  // The map's own value is read from the same variable: the reader writes no value, a port included.
+  assert.deepEqual(port.usedIn, ["SRC port", "config.listenPort"]);
   assert.equal(port.inConfigMap, true);
   assert.equal(root.inConfigMap, false);
   const md = readFileSync(join(r.project, "migration", CHANNEL, "MIGRATION-REPORT.md"), "utf8");
@@ -331,42 +411,144 @@ function rng(seed) {
   };
 }
 
-test("a marker planted as any value at any place in an export reaches no written file but the source copies", () => {
-  const WORDS = ["site", "code", "mode", "hmac", "api", "value", "name", "path", "retry", "zone", "label", "ref"];
-  const seeds = Array.from({ length: 24 }, (_, i) => 1000 + i * 7919);
+// Replaces `from` in `text`, failing when it is not there, so a planted marker never silently
+// misses its place because the fixture changed.
+function sub(text, from, to) {
+  assert.ok(text.includes(from), `the fixture no longer holds ${from}`);
+  return text.replace(from, () => to);
+}
+
+// Every place a value can sit in an export, with a marker planted at each. Names (of the channel,
+// a connector, a step, a library or a template, a configuration key, a transport or a data type)
+// are written to comments and the report so a person can find each element; they are not values
+// and are not planted here.
+function plantedExport(m, variant) {
+  let x = exportXml;
+  x = sub(x, "<id>00000000-0000-4000-8000-000000000001</id>", `<id>${m.channelId}</id>`);
+  x = sub(x, '<channel version="9.9.0">', `<channel version="${m.exportVersion}">`);
+  x = sub(x, "<description>A made-up feed for tests.</description>", `<description>${m.description}</description>`);
+  x = sub(x, "<revision>3</revision>", `<revision>${m.revision}</revision>`);
+  if (variant === "mllp-source") {
+    x = sub(x, "<host>0.0.0.0</host>", `<host>${m.listenerHost}</host>`);
+    x = sub(x, "<port>6661</port>", `<port>${m.sourcePort}</port>`);
+    x = sub(x, "</listenerConnectorProperties>", `</listenerConnectorProperties>\n      <keyStorePassword>${m.sourceProperty}</keyStorePassword>`);
+    x = sub(x, "<processBatch>false</processBatch>", `<processBatch>${m.processBatch}</processBatch>`);
+  } else {
+    const tcp = /<properties class="example\.connectors\.tcp\.TcpReceiverProperties"[\s\S]*?<\/properties>/;
+    assert.match(x, tcp);
+    x = x.replace(tcp, () => `<properties class="example.connectors.file.FileReceiverProperties"><scheme>FILE</scheme><host>${m.sourceFolder}</host><fileFilter>${m.sourceProperty}</fileFilter></properties>`);
+    x = sub(x, "<transportName>TCP Listener</transportName>", "<transportName>File Reader</transportName>");
+  }
+  x = sub(x, "var site = $cfg('siteCode');", `var site = $cfg('siteCode');\nvar planted = '${m.stepScript}';`);
+  x = sub(x, "<variable>patientClass</variable>", `<variable>${m.mapperVariable}</variable>`);
+  x = sub(x, "<defaultValue></defaultValue>", `<defaultValue>${m.mapperDefault}</defaultValue>`);
+  x = sub(x, "<template>&lt;xsl:stylesheet/&gt;</template>", `<template>${m.xslt}</template>`);
+  const sample = /<inboundTemplate encoding="base64">[^<]*<\/inboundTemplate>/;
+  assert.match(x, sample);
+  x = x.replace(sample, () => `<inboundTemplate>${m.sample}</inboundTemplate>`);
+  x = sub(x, "<operator>NONE</operator>", `<operator>${m.ruleOperator}</operator>`);
+  x = sub(x, "== 'A01';", `== '${m.ruleScript}';`);
+  x = sub(x, ARCHIVE, variant === "mllp-source" ? `<host>${m.archiveDir}</host>` : `<host>\${${m.refKey}}</host>`);
+  x = sub(x, "<outputPattern>${message.messageId}.hl7</outputPattern>", `<outputPattern>${m.outputPattern}</outputPattern>`);
+  x = sub(x, "<template>${message.encodedData}</template>", `<template>${m.fileTemplate}</template>`);
+  x = sub(x, "var stamp = eval('1 + 1');", `var stamp = '${m.destinationScript}';`);
+  x = sub(x, API_HOST, `<host>${m.resultsUrl}</host>`);
+  x = sub(x, "<method>post</method>", `<method>${m.method}</method>`);
+  x = sub(x, "<username>synth-user</username>", `<username>${m.username}</username>`);
+  x = sub(x, "<password>${resultsApiPassword}</password>", `<password>${m.password}</password>`);
+  x = sub(x, "<content>${message.encodedData}</content>", `<content>${m.content}</content>`);
+  x = sub(x, "<contentType>text/plain</contentType>", `<contentType>${m.contentType}</contentType>`);
+  x = sub(x, "responseStatus = ERROR;", `responseStatus = '${m.responseScript}';`);
+  x = sub(x, "<channelId>00000000-0000-4000-8000-000000000002</channelId>", `<channelId>${m.channelWriterId}</channelId>`);
+  x = sub(
+    x,
+    "  </destinationConnectors>",
+    [
+      '    <connector version="9.9.0">',
+      "      <metaDataId>4</metaDataId>",
+      "      <name>Relay</name>",
+      '      <properties class="example.connectors.tcp.TcpDispatcherProperties" version="9.9.0">',
+      '        <transmissionModeProperties class="example.MLLPModeProperties">',
+      `          <pluginPointName>${m.tcpMode}</pluginPointName>`,
+      "        </transmissionModeProperties>",
+      `        <remoteAddress>${m.tcpHost}</remoteAddress>`,
+      `        <remotePort>${m.tcpPort}</remotePort>`,
+      `        <keepConnectionOpen>${m.tcpProperty}</keepConnectionOpen>`,
+      "      </properties>",
+      "      <transportName>TCP Sender</transportName>",
+      "      <enabled>true</enabled>",
+      "    </connector>",
+      '    <connector version="9.9.0">',
+      "      <metaDataId>5</metaDataId>",
+      "      <name>Old archive</name>",
+      `      <properties class="example.connectors.file.FileDispatcherProperties"><scheme>FILE</scheme><host>${m.disabledDir}</host></properties>`,
+      "      <transportName>File Writer</transportName>",
+      "      <enabled>false</enabled>",
+      "    </connector>",
+      "  </destinationConnectors>",
+    ].join("\n"),
+  );
+  x = sub(x, "// Nothing to do before the message is read.", `// ${m.preprocessor}`);
+  x = sub(x, "globalChannelMap.put('started', 'yes');", `globalChannelMap.put('started', '${m.deployScript}');`);
+  x = sub(x, "<initialState>STARTED</initialState>", `<initialState>${m.initialState}</initialState>`);
+  x = sub(x, "<type>FUNCTION</type>", `<type>${m.templateType}</type>`);
+  x = sub(x, "text = '0' + text;", `text = '${m.sharedCode}' + text;`);
+  return x;
+}
+
+function plantedMap(m) {
+  let x = configXml;
+  x = sub(x, "<value>SYNTHSITE</value>", `<value>${m.configValue}</value>`);
+  x = sub(x, "<comment>The made-up site</comment>", `<comment>${m.configComment}</comment>`);
+  x = sub(x, "<value>not-a-real-secret-0000</value>", `<value>${m.configSecret}</value>`);
+  return withEntries([[m.extraKey, m.extraValue], [m.refKey, m.refValue]])(x);
+}
+
+test("a marker planted as any value at every place in an export reaches no written file but the source copies", () => {
+  const WORDS = ["site", "code", "mode", "pin", "pw", "value", "name", "path", "retry", "zone", "label", "ref"];
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const seeds = Array.from({ length: 8 }, (_, i) => 1000 + i * 7919);
   for (const seed of seeds) {
     const next = rng(seed);
     const pick = (list) => list[Math.floor(next() * list.length)];
-    const alnum = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const marker = `Zq${Array.from({ length: 10 + Math.floor(next() * 8) }, () => pick([...alnum])).join("")}`;
+    const word = (n) => Array.from({ length: n }, () => pick([...lower])).join("");
+    const digits = (n) => String(10 ** (n - 1) + Math.floor(next() * 9 * 10 ** (n - 1)));
+    // Each marker has a core of random letters or digits that nothing else in the output holds,
+    // and a shape picked from the seed. Most shapes are ones a rule by shape might call harmless:
+    // a number, a host name, a path, a URL, a duration.
+    const shapes = [
+      () => { const c = `zq${word(10)}`; return [`Zq${c}9X`, c]; },
+      () => { const c = digits(9); return [c, c]; },
+      () => { const c = `zq${word(8)}`; return [`${c}.example.test`, c]; },
+      () => { const c = `zq${word(8)}`; return [`/srv/${c}/in`, c]; },
+      () => { const c = `zq${word(8)}`; return [`C:\\svc\\${c}`, c]; },
+      () => { const c = `zq${word(8)}`; return [`https://${c}.example.test/hook/T0AB/x9`, c]; },
+      () => { const c = digits(7); return [`${c} s`, c]; },
+      () => { const c = digits(7); return [`PT${c}S`, c]; },
+    ];
+    const places = [
+      "channelId", "exportVersion", "description", "revision", "listenerHost", "sourcePort", "sourceFolder", "sourceProperty",
+      "processBatch", "stepScript", "mapperVariable", "mapperDefault", "xslt", "sample", "ruleOperator", "ruleScript", "archiveDir",
+      "outputPattern", "fileTemplate", "destinationScript", "resultsUrl", "method", "username", "password", "content", "contentType",
+      "responseScript", "channelWriterId", "tcpMode", "tcpHost", "tcpPort", "tcpProperty", "disabledDir", "preprocessor",
+      "deployScript", "initialState", "templateType", "sharedCode", "configValue", "configComment", "configSecret", "extraValue", "refValue",
+    ];
+    const m = {};
+    const cores = {};
+    for (const place of places) [m[place], cores[place]] = pick(shapes)();
     const parts = Array.from({ length: 1 + Math.floor(next() * 3) }, () => pick(WORDS));
-    const key = pick([
-      () => parts.join("_"),
-      () => parts.map((p, i) => (i === 0 ? p : p[0].toUpperCase() + p.slice(1))).join(""),
-      () => parts.join(".").toUpperCase(),
-    ])();
-    const place = pick(["config", "config-ref", "source-port", "archive-dir", "results-url", "tcp-host", "new-source-property", "new-destination-property"]);
-    let edit = (x) => x;
-    let editMap = (m) => m;
-    if (place === "config") editMap = withEntries([[key, marker]]);
-    if (place === "config-ref") {
-      editMap = withEntries([[key, marker]]);
-      edit = (x) => x.replace(ARCHIVE, `<host>\${${key}}</host>`);
-    }
-    if (place === "source-port") edit = (x) => x.replace("<port>6661</port>", `<port>${marker}</port>`);
-    if (place === "archive-dir") edit = (x) => x.replace(ARCHIVE, `<host>${marker}</host>`);
-    if (place === "results-url") edit = (x) => x.replace(API_HOST, `<host>${marker}</host>`);
-    if (place === "tcp-host") {
-      edit = (x) => x.replace(API_HOST, `<host>${marker}</host>`).replace("<transportName>HTTP Sender</transportName>", "<transportName>TCP Sender</transportName>").replace("<host>" + marker + "</host>", `<remoteAddress>${marker}</remoteAddress>`);
-    }
-    if (place === "new-source-property") edit = (x) => x.replace("<processBatch>false</processBatch>", `<processBatch>false</processBatch>\n      <${key.replace(/\./g, "_")}>${marker}</${key.replace(/\./g, "_")}>`);
-    if (place === "new-destination-property") edit = (x) => x.replace("<contentType>text/plain</contentType>", `<contentType>text/plain</contentType>\n        <${key.replace(/\./g, "_")}>${marker}</${key.replace(/\./g, "_")}>`);
-    const r = convertWith(edit, editMap);
-    assert.ok(r.code === 1, `seed ${seed}, ${place}, ${key}: exit ${r.code} ${r.err}`);
-    const { project, out, err } = r;
-    assert.ok(!(out + err).includes(marker), `seed ${seed}, ${place}, ${key}: printed`);
-    for (const f of writtenOutsideSource(project)) {
-      assert.ok(!readFileSync(f, "utf8").includes(marker), `seed ${seed}, ${place}, ${key}: written to ${relative(project, f)}`);
+    m.extraKey = parts.map((p, i) => (i === 0 ? p : p[0].toUpperCase() + p.slice(1))).join("");
+    m.refKey = `${parts.join("_")}_ref`;
+    for (const variant of ["mllp-source", "file-source"]) {
+      const r = convertWith(() => plantedExport(m, variant), () => plantedMap(m));
+      assert.equal(r.code, 1, `seed ${seed}, ${variant}: exit ${r.code} ${r.err}`);
+      const written = writtenOutsideSource(r.project).map((f) => [relative(r.project, f), readFileSync(f, "utf8")]);
+      assert.ok(written.length >= 6, `seed ${seed}, ${variant}: only ${written.length} files written`);
+      for (const place of places) {
+        const core = cores[place];
+        assert.ok(!(r.out + r.err).includes(core), `seed ${seed}, ${variant}, ${place}: printed`);
+        for (const [file, text] of written) assert.ok(!text.includes(core), `seed ${seed}, ${variant}, ${place} (${m[place]}): written to ${file}`);
+      }
     }
   }
 });

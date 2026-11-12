@@ -120,15 +120,40 @@ artifacts.forEach((a, i) => {
 writeList(".synthetic", [...synthetic, ...made]);
 
 // Every { env: NAME } the channel reads must be set for `pathways test` to load it. A variable that
-// is not set gets a placeholder in the test run only, and the run says which.
+// is not set gets a placeholder in the test run only, and the run says which. The placeholder is
+// one the setting accepts, so the channel loads: a port, a host on this machine, or a URL on this
+// machine with the scheme its plaintext line asks for. Nothing connects to it.
 const env = { ...process.env };
 const placeholders = [];
-for (const m of yaml.matchAll(/^\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/gm)) {
-  if (env[m[1]] === undefined || env[m[1]] === "") {
-    env[m[1]] = "placeholder-set-by-try-channel";
-    placeholders.push(m[1]);
+const yamlLines = yaml.split(/\r?\n/);
+const indentOf = (line) => /^ */.exec(line)[0].length;
+function placeholderFor(at) {
+  const keyLine = yamlLines[at - 1] ?? "";
+  const key = /^\s*(?:-\s+)?([A-Za-z][A-Za-z0-9]*):\s*$/.exec(keyLine)?.[1];
+  if (key === "port") return "2575";
+  if (key === "host") return "127.0.0.1";
+  if (key === "url") {
+    // plaintext: true beside the url, in the same block, means an http:// URL.
+    const indent = indentOf(keyLine);
+    let plaintext = false;
+    for (const dir of [-1, 1]) {
+      for (let i = at - 1 + dir; i >= 0 && i < yamlLines.length; i += dir) {
+        const line = yamlLines[i];
+        if (line.trim() === "" || line.trim().startsWith("#")) continue;
+        if (indentOf(line) < indent) break;
+        if (indentOf(line) === indent && /^\s*plaintext:\s*true\s*$/.test(line)) plaintext = true;
+      }
+    }
+    return plaintext ? "http://127.0.0.1:9/" : "https://127.0.0.1:9/";
   }
+  return "placeholder-set-by-try-channel";
 }
+yamlLines.forEach((line, at) => {
+  const name = /^\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(line)?.[1];
+  if (name === undefined || (env[name] !== undefined && env[name] !== "")) return;
+  env[name] = placeholderFor(at);
+  if (!placeholders.includes(name)) placeholders.push(name);
+});
 
 function pathways(argv) {
   const r = spawnSync(process.execPath, [pathwaysBin, ...argv], { cwd: project, env, encoding: "utf8", timeout: 600_000 });

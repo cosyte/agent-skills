@@ -40,13 +40,14 @@ Pathways 0.0.3 source that `pathways test` runs only the transform and builds no
 have not confirmed it from the published package, so run `try-channel.mjs` only in a project whose
 destinations cannot reach a real system.
 
-Secrets are handled by default deny. A connector setting or configuration map value is written as
-it is only when the reader can prove it is not a secret: a boolean, a number, a duration, a host
-name, a URL with no user name, password, query or fragment, or a file path, under a key not named
-like a secret. Every other value, whatever it is called, becomes an environment reference with no
-default, and its value is not written to the channel, the model or the report. Each variable name
-stands for one key or setting, and the report lists every variable, what it stands for and where
-it is used, never the value. Restore a plain value by hand after you look at it. The
+No value from the export is written. The reader cannot tell a PIN from a port or a password from
+a host name, so it writes none of them: every connector setting it converts and every
+configuration map value becomes an environment reference with no default, whatever its name or
+shape. Host names, ports, URLs, paths, numbers and durations are withheld too; the one exception is
+a configuration map value of exactly `true` or `false`. Each variable name stands for one key or
+setting, and the report lists every variable, what it stands for and where it is used, never the
+value: set each by hand from the export, and put a plain value back into `channel.yaml` by hand
+after you look at it. The
 exception is `migration/<name>/source/`: it holds verbatim copies of the exported scripts, which can
 hold hard-coded passwords and sample patient data. The reader writes a `.gitignore` there that keeps
 them out of version control, and the report lists each line shaped like a secret by file and line.

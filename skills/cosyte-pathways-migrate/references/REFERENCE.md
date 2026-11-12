@@ -3,16 +3,21 @@
 What the reader converts, the files it writes, and the formats of its model and report. Every
 Pathways key named here is a key of `@cosyte/pathways` 0.0.3, the version in the skill's metadata.
 
+No value from the export is written. Where a row below says a setting is converted (a port, a
+host, a folder, a URL), `channel.yaml` reads it from an environment variable with no default,
+`{ env: <CHANNEL>_<ID>_<SETTING> }`, and the report lists the variable for the user to set by hand.
+The reader cannot tell a PIN from a port or a password from a host name, so it writes none of them.
+
 ## The conversion table
 
 ### The source
 
 | In the export | In channel.yaml | Status and flag |
 | --- | --- | --- |
-| TCP listener in MLLP mode | `source.mllp` with the port, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: set `host` and `tls` before it takes traffic from another machine |
-| TCP listener in another mode | `source.tcp` with the port, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: framing was not converted |
-| HTTP listener | `source.http` with the port, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: set `tls` and `auth` |
-| File reader on a local folder | `source.file.dir`, the exported folder | converted, with a flag: filters, sorting and the after-read action were not converted |
+| TCP listener in MLLP mode | `source.mllp` with the port from the environment, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: set `host` and `tls` before it takes traffic from another machine |
+| TCP listener in another mode | `source.tcp` with the port from the environment, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: framing was not converted |
+| HTTP listener | `source.http` with the port from the environment, `host: "127.0.0.1"`, `plaintext: true` | converted, with a flag: set `tls` and `auth` |
+| File reader on a local folder | `source.file.dir`, the exported folder, from the environment | converted, with a flag: filters, sorting and the after-read action were not converted |
 | Any other source | `source.file.dir: "../../data/<name>/in"`, standing in | not converted, with the transport named |
 | Batch processing on the source | nothing | not converted: Pathways 0.0.3 splits no batch on a source |
 | The inbound data type | `format:` | HL7 v2 to `hl7v2`, JSON to `json`, delimited to `csv`, EDI or X12 to `x12`, FHIR to `fhir`; anything else to `text`, with a flag |
@@ -24,10 +29,10 @@ output and never sends it. The team removes the line when it decides to send.
 
 | In the export | In channel.yaml | Status and flag |
 | --- | --- | --- |
-| File writer on a local folder | `file.dir`, the exported folder | converted, with a flag: Pathways names each file itself |
-| HTTP sender | `http.url`; with authentication, `headers.Authorization: { env: <CHANNEL>_D<n>_AUTHORIZATION }` | converted, with a flag: method, content type and query not converted; set the variable to the header's whole value |
-| TCP sender in MLLP mode | `mllp` with the host and port, `plaintext: true` | converted, with a flag: set `tls` |
-| TCP sender in another mode | `tcp` with the host and port, `plaintext: true` | converted, with a flag: framing was not converted |
+| File writer on a local folder | `file.dir`, the exported folder, from the environment | converted, with a flag: Pathways names each file itself |
+| HTTP sender | `http.url` from the environment, with `plaintext: true` when the exported URL is `http://`; with authentication, `headers.Authorization: { env: <CHANNEL>_D<n>_AUTHORIZATION }` | converted, with a flag: method, content type and query not converted; set the variable to the header's whole value |
+| TCP sender in MLLP mode | `mllp` with the host and port from the environment, `plaintext: true` | converted, with a flag: set `tls` |
+| TCP sender in another mode | `tcp` with the host and port from the environment, `plaintext: true` | converted, with a flag: framing was not converted |
 | Channel writer | nothing | not converted: Pathways 0.0.3 has no channel destination |
 | Any other destination, or one disabled in the export | nothing | not converted, with the reason |
 
@@ -63,10 +68,10 @@ Every one of these is a step: it gets a marker, and `check-migration` exits 1 un
 | In the export | Status |
 | --- | --- |
 | The channel's name | converted: cut to lowercase letters, digits and hyphens |
-| Configuration map key | converted: `config.<key>` with its value, only when the value is provably harmless (a boolean, a number of at most 10 digits, a duration, a host name or IPv4 address, a URL with no user name, password, query, fragment, `;`, `=` or `,`, or a file path; no part of a path or URL 20 characters or longer with letters and digits) and the key is not named like a secret. Every other value becomes `{ env: <KEY> }` with no default, converted with a flag, value not written |
-| A connector setting the reader converts (a URL, a host, a folder, a port) whose value is not provably harmless by the same rule | `{ env: <CHANNEL>_<ID>_<SETTING> }` with no default, the element converted with a flag that names the variable, value not written |
+| Configuration map key | `config.<key>: { env: <KEY> }` with no default, converted with a flag, value not written, whatever the key's name and the value's shape. A value of exactly `true` or `false` is the one value written as it is, converted |
+| A connector setting the reader converts (a URL, a host, a folder, a port) | `{ env: <CHANNEL>_<ID>_<SETTING> }` with no default, the element converted with a flag that names the variable, value not written |
 | Two keys or settings whose names fold to one variable (`apiToken` and `api_token`) | each gets its own variable: the first in the export keeps the name, the next gets `_` and six hexadecimal digits of a hash of what it stands for. A configuration map key always keeps its name ahead of a connector setting |
-| Any other connector property named like a secret or shaped like one (a keystore or truststore password, a token, a key) | not converted, kind `credential`, listed by the property's name, value not written |
+| Any other connector property (a keystore or truststore password, a method, a file name pattern) | not converted, kind `property`, listed by the property's name, value not written |
 | `${key}` in a converted setting | `{ env: <KEY> }`, with no default, listed in the report's environment variables whether or not the configuration map has the key |
 | An embedded sample message | not converted: dropped, unless `--keep-samples-synthetic`, when it becomes `tests/sample-<owner>-<inbound or outbound>.<ext>` with no expected file |
 | Id, revision, description and export metadata | not converted: the other engine's bookkeeping |
@@ -106,22 +111,23 @@ credential scan lists each line shaped like a secret, there and anywhere else in
 {
   "format": "cosyte-pathways-migrate/1",
   "pathwaysVersion": "0.0.3",
-  "channel": { "name": "synth-adt-feed", "exportedName": "Synth ADT Feed", "exportVersion": "9.9.0" },
+  "channel": { "name": "synth-adt-feed", "exportedName": "Synth ADT Feed" },
   "formatName": "hl7v2",
   "source": { "id": "SRC", "transport": "TCP Listener", "kind": "mllp", "settings": {}, "filter": [], "steps": [] },
   "destinations": [{ "id": "D1", "index": 1, "name": "Archive", "kind": "file", "settings": {}, "filter": [], "steps": [], "responseSteps": [] }],
   "scripts": { "PRE": { "empty": true }, "DEPLOY": { "empty": false, "file": "source/DEPLOY-deploy-script.js" } },
   "shared": [{ "id": "T1", "library": "Synth Helpers", "name": "padLeft", "file": "source/T1-...js", "module": "shared/....ts" }],
-  "config": [{ "key": "retries", "value": "3", "secret": false }, { "key": "apiPassword", "env": "API_PASSWORD", "secret": true }],
+  "config": [{ "key": "archiveOn", "value": "true" }, { "key": "apiPassword", "env": "API_PASSWORD" }],
   "envRefs": [{ "name": "API_PASSWORD", "configKey": "apiPassword", "inConfigMap": true, "usedIn": ["config.apiPassword"] }],
   "elements": [],
   "dynamic": []
 }
 ```
 
-A setting is `{ "value": "..." }`, `{ "env": "NAME", "ref": "key" }` for `${key}`, or
-`{ "env": "NAME", "secret": true }` for a value the reader could not prove harmless, whose value is
-never in the model. An `envRefs` entry names a configuration map key (`configKey`, `inConfigMap`)
+A setting from the export is `{ "env": "NAME", "ref": "key" }` for `${key}`, or `{ "env": "NAME" }`
+for any other value, which is never in the model; `{ "value": "..." }` is only a value the reader
+chose itself, such as `127.0.0.1` or a stand-in port. A filter rule's `operator` is `AND`, `OR`,
+`NONE` or `other`, never the exported text. An `envRefs` entry names a configuration map key (`configKey`, `inConfigMap`)
 or a connector setting (`element`, `setting`), with `usedIn`. A `kind` of `null` is a destination that was not converted.
 
 ## report.json
@@ -132,8 +138,8 @@ or a connector setting (`element`, `setting`), with `usedIn`. A `kind` of `null`
   "pathwaysVersion": "0.0.3",
   "channel": { "name": "synth-adt-feed" },
   "summary": {
-    "elements": 21, "converted": 5, "convertedWithFlag": 5, "rewritten": 0, "rewritePending": 5,
-    "notConverted": 6, "pendingSteps": 8, "environmentVariables": 3, "unreviewedExpected": 0, "phiFindings": 0,
+    "elements": 28, "converted": 5, "convertedWithFlag": 5, "rewritten": 0, "rewritePending": 5,
+    "notConverted": 13, "pendingSteps": 8, "environmentVariables": 6, "unreviewedExpected": 0, "phiFindings": 0,
     "secretFindings": 0, "filesScanned": 11, "syntheticFilesSkipped": 0
   },
   "elements": [{ "id": "S1", "kind": "step", "name": "Set receiving app", "status": "rewrite-pending", "reason": "...", "step": true, "file": "migration/.../source/S1-....js" }],
@@ -148,7 +154,7 @@ or a connector setting (`element`, `setting`), with `usedIn`. A `kind` of `null`
 `status` is one of `converted`, `converted-with-flag`, `rewritten`, `rewrite-pending` and
 `not-converted`; every status but `converted` and `rewritten` carries a `reason`. `kind` is one of
 `channel`, `setting`, `source`, `destination`, `filter-rule`, `step`, `response-step`, `script`,
-`shared-code`, `config`, `credential` and `sample`. A dynamic construct is one of `eval`,
+`shared-code`, `config`, `property` and `sample`. A dynamic construct is one of `eval`,
 `function-constructor`, `java-bridge`, `shared-map`, `routing` and `network-or-file`. A PHI finding
 is one of `ssn`, `email`, `phone`, `hl7-patient-segment` and `too-large-to-scan`. A credential
 finding is one of `secret-assignment`, `url-credentials`, `url-query-credential`,

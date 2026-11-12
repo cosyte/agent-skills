@@ -80,3 +80,68 @@ test("marks as synthetic only the inputs it wrote, never a file that was already
   assert.match(r.out, /1 synthetic input\(s\) written/);
   assert.match(r.out, /synth-1-001\.hl7 was already there/);
 });
+
+test("gives each unset variable a placeholder its setting accepts, so the channel loads", () => {
+  const dir = projectWithStandIns();
+  const channel = join(dir, "channels", "synth-adt-feed");
+  writeFileSync(
+    join(channel, "channel.yaml"),
+    [
+      "name: synth-adt-feed",
+      "format: hl7v2",
+      "source:",
+      "  mllp:",
+      "    port:",
+      "      env: SYNTH_SRC_PORT",
+      '    host: "127.0.0.1"',
+      "    plaintext: true",
+      "destinations:",
+      "  - http:",
+      "      url:",
+      "        env: SYNTH_PLAIN_URL",
+      "      plaintext: true",
+      "    dryRun: true",
+      "  - http:",
+      "      url:",
+      "        env: SYNTH_TLS_URL",
+      "      headers:",
+      "        Authorization:",
+      "          env: SYNTH_AUTH",
+      "    dryRun: true",
+      "  - tcp:",
+      "      host:",
+      "        env: SYNTH_TCP_HOST",
+      "      port:",
+      "        env: SYNTH_TCP_PORT",
+      "      plaintext: true",
+      "    dryRun: true",
+      "  - file:",
+      "      dir:",
+      "        env: SYNTH_OUT_DIR",
+      "    dryRun: true",
+      "config:",
+      "  siteCode:",
+      "    env: SITE_CODE",
+      "",
+    ].join("\n"),
+  );
+  // The stand-in pathways command records the environment it was given, then exits 0.
+  writeFileSync(
+    join(dir, "node_modules", "@cosyte", "pathways", "bin", "pathways.mjs"),
+    'import { writeFileSync } from "node:fs";\n' +
+      'const seen = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(SYNTH_|SITE_)/.test(k)));\n' +
+      'writeFileSync("seen-env.json", JSON.stringify(seen));\n',
+  );
+  const r = run(["--project", dir, "--channel", "synth-adt-feed", "--count", "1"]);
+  assert.equal(r.code, 0, r.out + r.err);
+  const seen = JSON.parse(readFileSync(join(dir, "seen-env.json"), "utf8"));
+  assert.match(seen.SYNTH_SRC_PORT, /^[0-9]+$/);
+  assert.match(seen.SYNTH_TCP_PORT, /^[0-9]+$/);
+  assert.equal(seen.SYNTH_TCP_HOST, "127.0.0.1");
+  assert.match(seen.SYNTH_PLAIN_URL, /^http:\/\/127\.0\.0\.1[:/]/);
+  assert.match(seen.SYNTH_TLS_URL, /^https:\/\/127\.0\.0\.1[:/]/);
+  assert.ok(seen.SYNTH_OUT_DIR.length > 0);
+  assert.ok(seen.SYNTH_AUTH.length > 0);
+  assert.ok(seen.SITE_CODE.length > 0);
+  assert.match(r.out, /placeholders set for this run only: .*SYNTH_SRC_PORT/);
+});

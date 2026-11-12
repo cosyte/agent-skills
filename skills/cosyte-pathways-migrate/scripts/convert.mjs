@@ -49,71 +49,38 @@ export function envName(...parts) {
     .replace(/^(?=[0-9])/, "_");
 }
 
-// A name that says its value is a secret. Matched anywhere in the name, so it catches more names
-// than it needs to; that only sends a harmless value to the environment.
-const SECRET_NAME = /pass(word|wd|phrase)?|secret|token|key|credential|private|pwd|auth|cookie|session|salt|hmac|sig(nature)?|cert|pin$/i;
-export const isSecretName = (name) => SECRET_NAME.test(name);
+// No value from an export is written. Every connector setting the reader converts and every
+// configuration map value becomes an environment reference with no default, whatever its name and
+// whatever its shape: the reader cannot tell a PIN from a port, a password from a host name, or a
+// token from a folder, so it writes none of them. The migration report lists each variable, the
+// setting it stands for and where it is used, never the value.
+//
+// Two exceptions only. A configuration map value that is exactly the JSON boolean true or false is
+// written as it is. A field the Pathways channel schema fixes to a closed set of values could be
+// written too, but no setting this reader writes from an export is one: it writes port, host, dir
+// and url, each an open number or string, so that list is empty.
+const BOOLEAN = /^(?:true|false)$/;
+export const writtenAsIs = (raw) => BOOLEAN.test(String(raw ?? ""));
 
-// Default deny. A value the export gives for a setting or a configuration map key is written as it
-// is only when it is provably not a secret by this closed rule: a boolean, a number, a duration, a
-// host name or an IP address, a URL with no user name, password, query, fragment or parameter, or
-// a file path. Every other value, whatever it is called, becomes an environment reference with no
-// default, and the report names the variable, never the value. No property name is allowed by
-// name alone, and no Pathways setting this reader writes takes an enum, so neither rule is here.
-const NUMBER = /^-?[0-9]{1,10}(?:\.[0-9]{1,6})?$/;
-const DURATION = /^[0-9]{1,9}(?:\.[0-9]{1,3})? ?(?:ms|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?|d|days?)$/i;
-const ISO_DURATION = /^P(?=[0-9T])(?:[0-9]{1,9}[YMWD])*(?:T(?=[0-9])(?:[0-9]{1,9}[HMS])+)?$/;
-const HOST_LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
-const HOST_NAME = new RegExp(`^(?:${HOST_LABEL}\\.)+[A-Za-z]{2,63}$`);
-const IPV4 = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$/;
-const PATH = /^(?:\/|\.{1,2}\/|~\/|[A-Za-z]:[\\/])[A-Za-z0-9._~ /\\-]*$/;
-// A part of a path or a URL that could be a token: 20 or more characters with letters and digits.
-const tokenLike = (part) => part.length >= 20 && /[0-9]/.test(part) && /[A-Za-z]/.test(part);
+// The closed set of filter rule operators the model records. Any other text is recorded as other,
+// never as written.
+const RULE_OPERATORS = new Set(["AND", "OR", "NONE"]);
 
-const isHost = (v) => v === "localhost" || IPV4.test(v) || HOST_NAME.test(v);
-
-function isPlainUrl(v) {
-  if (!/^[A-Za-z][A-Za-z0-9+.-]*:\/\/\S*$/.test(v) || /[?#@;=,]/.test(v)) return false;
-  let url;
-  try {
-    url = new URL(v);
-  } catch {
-    return false;
-  }
-  if (url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "") return false;
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (host === "" ? url.protocol !== "file:" : !isHost(host)) return false;
-  return !url.pathname.split("/").some(tokenLike);
-}
-
-// The kind of harmless value this is, or null when it is not provably harmless.
-export function harmlessKind(raw) {
-  const v = String(raw ?? "").trim();
-  if (v === "") return "empty";
-  if (/^(?:true|false)$/i.test(v)) return "boolean";
-  if (NUMBER.test(v)) return "number";
-  if (DURATION.test(v) || ISO_DURATION.test(v)) return "duration";
-  if (isHost(v)) return "host";
-  if (isPlainUrl(v)) return "url";
-  if (PATH.test(v) && !v.split(/[\\/]/).some(tokenLike)) return "path";
-  return null;
-}
-
-const HARMLESS_WORDS = "a boolean, a number, a duration, a host name, a URL with no user name, query or fragment, or a file path";
-
-// A parameter in a URL's query or a connection string that carries a credential.
-const SECRET_PARAM = /pass(word|wd|phrase)?|secret|token|key|credential|pwd|auth|sig(nature)?$|^sig$|^sas$/i;
+// A parameter in a URL's query or a connection string that carries a credential. Used by the
+// credential scan only: it decides nothing about what is written.
+const SECRET_PARAM = (name) =>
+  /pass(?:word|wd|phrase)?|secret|token|key|credential|pwd|auth/i.test(name) || /sig(?:nature)?$/i.test(name) || /^sas$/i.test(name);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// The kind of secret a value looks like, or null. It decides by the value's shape, whatever the
-// name of the setting that holds it: a URL with a user name or password, a credential in a query or
-// a connection string, a private key, a signed token, an authorization header, a long random token.
+// The kind of secret a value looks like, or null, for the credential scan of the files written. It
+// decides by the value's shape: a URL with a user name or password, a credential in a query or a
+// connection string, a private key, a signed token, an authorization header, a long random token.
 export function secretShape(raw) {
   const value = String(raw ?? "").trim();
   if (value === "") return null;
   if (/:\/\/[^/?#\s@]*@/.test(value)) return "url-credentials";
   for (const m of value.matchAll(/(?:^|[?&;#\s])([A-Za-z][A-Za-z0-9 _.-]*?)\s*=\s*([^&;\s]+)/g)) {
-    if (SECRET_PARAM.test(m[1].trim())) return /:\/\//.test(value) ? "url-query-credential" : "connection-string-credential";
+    if (SECRET_PARAM(m[1].trim())) return /:\/\//.test(value) ? "url-query-credential" : "connection-string-credential";
   }
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value)) return "private-key";
   if (/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\./.test(value)) return "signed-token";
@@ -205,7 +172,7 @@ class Builder {
     this.envOf = new Map(); // identity -> name
     this.envUsed = new Map(); // name -> { name, configKey | element and setting, usedIn }
     this.markers = { transform: [], shared: new Map() };
-    this.secretSettings = []; // { owner, where, env, shape }: a literal setting that looked secret
+    this.withheld = []; // { owner, where, env }: a setting whose exported value was not written
   }
 
   add(entry) {
@@ -255,22 +222,17 @@ class Builder {
     return this.useEnv(envName(key), `config:${key}`, { configKey: key, inConfigMap }, usedIn);
   }
 
-  // A setting's value. ${key} becomes an environment reference with no default. Any other value
-  // is kept only when harmlessKind proves it harmless; otherwise it becomes an environment
-  // reference named for the element and the setting, and its value is never kept: not in the
-  // model, the channel or the report.
+  // A setting's value, which is never written. ${key} becomes an environment reference to that
+  // configuration map key; any other value becomes an environment reference named for the element
+  // and the setting. Neither has a default, and the value is kept nowhere: not in the model, the
+  // channel or the report.
   setting(raw, where, owner) {
     if (raw === undefined) return undefined;
-    const value = raw.trim();
-    const m = VAR_RE.exec(value);
-    if (m === null) {
-      if (harmlessKind(value) !== null) return { value };
-      const env = this.useEnv(envName(this.name, owner, where), `setting:${owner}:${where}`, { element: owner, setting: where }, `${owner} ${where}`);
-      this.secretSettings.push({ owner, where, env, shape: secretShape(value) });
-      return { env, secret: true };
-    }
-    const key = m[1];
-    return { env: this.configEnv(key, `${owner} ${where}`), ref: key };
+    const m = VAR_RE.exec(raw.trim());
+    if (m !== null) return { env: this.configEnv(m[1], `${owner} ${where}`), ref: m[1] };
+    const env = this.useEnv(envName(this.name, owner, where), `setting:${owner}:${where}`, { element: owner, setting: where }, `${owner} ${where}`);
+    this.withheld.push({ owner, where, env });
+    return { env };
   }
 
   build() {
@@ -308,7 +270,7 @@ class Builder {
     this.model = {
       format: MODEL_FORMAT,
       pathwaysVersion: PATHWAYS_VERSION,
-      channel: { name, exportedName: label(exportedName), exportVersion: label(root.attrs.version ?? "") },
+      channel: { name, exportedName: label(exportedName) },
       formatName: source.format,
       source,
       destinations,
@@ -376,9 +338,9 @@ class Builder {
       src.settings.port = { value: "2575" };
       reason += "; the export gives no port, 2575 stands in";
     }
-    reason += this.secretNote("SRC");
+    reason += this.withheldNote("SRC");
     this.add({ id: "SRC", kind: "source", name: transport, status, reason });
-    this.readCredentials(props, "SRC", src.settings);
+    this.readProperties(props, "SRC", src.placeholder ? [] : ["port", "pluginPointName", "processBatch", "scheme", ...(src.kind === "file" ? ["host"] : [])]);
     if ((textOf(props, "processBatch") ?? "").trim() === "true") {
       this.add({ id: "SRC-batch", kind: "setting", name: "batch processing", status: "not-converted", reason: "Pathways 0.0.3 does not split a batch on a source: each file or body is one message" });
     }
@@ -411,8 +373,8 @@ class Builder {
         dest.settings.headers = { Authorization: { env } };
         reason += `; its user name and password became the Authorization header, read from ${env}, which you set`;
       }
-      // An http:// URL read from the environment because it held a secret is still plaintext.
-      if (/^http:/i.test(dest.settings.url?.secret === true ? rawUrl : dest.settings.url?.value ?? "")) {
+      // The URL is read from the environment, but an exported http:// URL still needs plaintext.
+      if (/^http:/i.test(rawUrl)) {
         dest.settings.plaintext = true;
         reason += "; an http:// URL needs plaintext: true";
       }
@@ -439,9 +401,10 @@ class Builder {
       dest.kind = null;
     }
     dest.status = status;
-    if (dest.kind !== null) reason += this.secretNote(id);
+    if (dest.kind !== null) reason += this.withheldNote(id);
     this.add({ id, kind: "destination", name, status, reason });
-    this.readCredentials(props, id, dest.settings);
+    const used = { file: ["scheme", "host"], http: ["host", "useAuthentication", ...(dest.settings.headers ? ["username", "password"] : [])], mllp: ["remoteAddress", "remotePort", "pluginPointName"], tcp: ["remoteAddress", "remotePort", "pluginPointName"] };
+    this.readProperties(props, id, used[dest.kind] ?? []);
     const owner = `${id}-`;
     const where = `destination ${index}`;
     dest.filter = this.readFilter(child(node, "filter"), owner, `${where} filter`, true);
@@ -451,24 +414,18 @@ class Builder {
     return dest;
   }
 
-  // Words for an element's reason naming each setting that became an environment reference
-  // because its value looked like a secret.
-  secretNote(owner) {
-    return this.secretSettings
+  // Words for an element's reason naming each setting read from the environment.
+  withheldNote(owner) {
+    return this.withheld
       .filter((s) => s.owner === owner)
-      .map((s) =>
-        s.shape === null
-          ? `; its ${s.where} is not a value the reader can prove harmless, so it is read from ${s.env}, which you set; that value was not written. This is deliberate: look at the exported value and write it back by hand if it is not a secret`
-          : `; its ${s.where} looked like it holds a secret (${s.shape}), so it is read from ${s.env}, which you set to the exported value; that value was not written`)
+      .map((s) => `; its ${s.where} is read from ${s.env}, which you set by hand: the reader writes no value from the export`)
       .join("");
   }
 
-  // Each property of a connector named like a secret or shaped like one that the reader does not
-  // convert (a keystore or truststore password, a token, a key) is listed by the property's name,
-  // its value never written.
-  readCredentials(props, owner, settings) {
+  // Each property of a connector the reader does not convert is listed by the property's name, its
+  // value never written. `used` names the properties the conversion already read.
+  readProperties(props, owner, used) {
     if (props === undefined) return;
-    const converted = new Set(["host", "port", "remoteAddress", "remotePort", "username", "useAuthentication"]);
     let n = 0;
     const visit = (node) => {
       for (const c of node.children) {
@@ -476,17 +433,14 @@ class Builder {
           visit(c);
           continue;
         }
-        const text = c.text.trim();
-        if (converted.has(c.name) || text === "" || VAR_RE.test(text)) continue;
-        if (c.name === "password" && settings.headers?.Authorization !== undefined) continue;
-        if (!isSecretName(c.name) && secretShape(text) === null) continue;
+        if (used.includes(c.name) || c.text.trim() === "") continue;
         n += 1;
         this.add({
-          id: `${owner}-K${n}`,
-          kind: "credential",
+          id: `${owner}-P${n}`,
+          kind: "property",
           name: c.name,
           status: "not-converted",
-          reason: "a credential in the connector's properties: its value was not written. Pathways reads a credential from the environment; if the converted connector needs it, add it to channel.yaml as { env: NAME } by hand",
+          reason: "a connector property this reader does not convert: its value was not written. If the converted connector needs it, add it to channel.yaml by hand, as { env: NAME } when it is a secret",
         });
       }
     };
@@ -528,7 +482,8 @@ class Builder {
         status = "not-converted";
         reason = "disabled in the export";
       }
-      const rule = { id, kind, name: label(name), file, enabled, operator: label(textOf(el, "operator") ?? "") };
+      const operator = (textOf(el, "operator") ?? "").trim().toUpperCase();
+      const rule = { id, kind, name: label(name), file, enabled, operator: RULE_OPERATORS.has(operator) ? operator : "other" };
       this.add({ id, kind: "filter-rule", name, status, reason, step: true, file: file && `${this.migrationDir}/${file}` });
       this.markers.transform.push({ id, what: `${where} rule ${i + 1}`, name, file, reason });
       rules.push(rule);
@@ -665,19 +620,13 @@ class Builder {
         this.add({ id, kind: "config", name: key, status: "not-converted", reason: "a key that is not a plain name" });
         continue;
       }
-      if (entry.secret) {
-        const env = this.configEnv(key, `config.${key}`);
-        config.push({ key, env, secret: true });
-        const why = entry.shape
-          ? `a value shaped like a secret (${entry.shape})`
-          : entry.byName
-            ? "a secret by its name"
-            : `not a value the reader can prove harmless (${HARMLESS_WORDS})`;
-        const deliberate = entry.shape || entry.byName ? "" : ". This is deliberate: look at the exported value and write it back by hand if it is not a secret";
-        this.add({ id, kind: "config", name: key, status: "converted-with-flag", reason: `${why}: ctx.config.${key} reads it from ${env}, which you set where the engine runs; its value was not written${deliberate}` });
+      if (writtenAsIs(entry.value)) {
+        config.push({ key, value: entry.value });
+        this.add({ id, kind: "config", name: key, status: "converted", reason: `kept as ctx.config.${key}: the value is the boolean ${entry.value}, the one kind of value the reader writes` });
       } else {
-        config.push({ key, value: entry.value, secret: false });
-        this.add({ id, kind: "config", name: key, status: "converted", reason: `kept as ctx.config.${key}, the value as exported: ${entry.harmless}` });
+        const env = this.configEnv(key, `config.${key}`);
+        config.push({ key, env });
+        this.add({ id, kind: "config", name: key, status: "converted-with-flag", reason: `read as ctx.config.${key} from ${env}, which you set by hand where the engine runs: the reader writes no value from the export, since it cannot tell a secret from a harmless value` });
       }
     }
     return config;
@@ -750,12 +699,12 @@ class Builder {
     if (m.config.length > 0) {
       out.push(
         "",
-        "# The exported configuration map, as ctx.config. A value the reader cannot prove harmless is read",
-        "# from the environment, with no default: MIGRATION-REPORT.md lists each variable to set.",
+        "# The exported configuration map, as ctx.config. Every value but true and false is read from the",
+        "# environment, with no default: MIGRATION-REPORT.md lists each variable to set by hand.",
         "config:",
       );
       for (const c of m.config) {
-        if (c.secret) out.push(`  ${c.key}:`, `    env: ${c.env}`);
+        if (c.env !== undefined) out.push(`  ${c.key}:`, `    env: ${c.env}`);
         else out.push(`  ${c.key}: ${q(c.value)}`);
       }
     }
@@ -842,9 +791,9 @@ export function wrap(text, width) {
 
 const CONFIG_KEY = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
-// Reads a configuration map export: entries of a key and a value, in order. A value is kept only
-// when harmlessKind proves it harmless and its key is not named like a secret; every other value is
-// kept in memory only, to be replaced by an environment reference.
+// Reads a configuration map export: entries of a key and a value, in order. A value is held in
+// memory only, to tell true and false from every other value, which becomes an environment
+// reference.
 export function readConfigMapTree(root) {
   const map = new Map();
   for (const entry of children(root, "entry")) {
@@ -852,10 +801,7 @@ export function readConfigMapTree(root) {
     if (keyNode === undefined) continue;
     const key = keyNode.text.trim();
     const value = valueNode === undefined ? "" : (textOf(valueNode, "value") ?? valueNode.text).trim();
-    const shape = secretShape(value);
-    const byName = isSecretName(key);
-    const harmless = harmlessKind(value);
-    map.set(key, { value, secret: byName || shape !== null || harmless === null, shape, byName, harmless });
+    map.set(key, { value });
   }
   return map;
 }
