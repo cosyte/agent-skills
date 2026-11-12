@@ -92,14 +92,18 @@ const t = parseTelecom(wire);
 const c = claim(t);
 
 console.log(t.kind, t.header.transactionCode, t.warnings.length);
-console.log(c?.cardholderId, c?.prescriptionReferenceNumber);
+// Read the member and prescription numbers into variables. Do not log them: the values in the
+// comments are synthetic.
+const cardholderId = c?.cardholderId; // "SYNTHCARD09" (synthetic)
+const rxNumber = c?.prescriptionReferenceNumber; // "RX0000001" (synthetic)
+console.log("cardholder id and Rx number present", cardholderId !== undefined, rxNumber !== undefined);
 console.log(c?.product?.id, c?.product?.qualifier);
 console.log(c?.quantityDispensed?.source, c?.quantityDispensed?.impliedDecimal);
 ```
 
 ```text
 request B1 0
-SYNTHCARD09 RX0000001
+cardholder id and Rx number present true true
 99999999999 03
 30000 30.000
 ```

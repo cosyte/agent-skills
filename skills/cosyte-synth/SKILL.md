@@ -68,7 +68,7 @@ const corpus = hl7Corpus({ seed: 42, count: 7 }); // one of each family, cycled
 console.log(corpus.artifacts.every((a) => a.warnings.length === 0)); // true, all spec-clean
 
 // Dispatch by kind when the message type is data:
-console.log(roundTrip(generateHl7("VXU^V04", 12345)).content.split("\r")[0]); // its MSH segment
+console.log(roundTrip(generateHl7("VXU^V04", 12345)).content.startsWith("MSH|")); // true, it opens with an MSH segment
 ```
 
 What the README promises, and only that:

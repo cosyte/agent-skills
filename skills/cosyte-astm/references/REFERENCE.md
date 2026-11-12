@@ -40,7 +40,7 @@ try {
   if (err instanceof AstmAmbiguousStreamError) {
     for (const m of messages(msg)) {
       // m.patient is the P for THIS message; m.results are its results only.
-      console.log(m.index, m.patient?.practiceAssignedId, m.results.length);
+      console.log(m.index, m.patient !== undefined, m.results.length); // never the patient's id
     }
   }
 }
@@ -63,7 +63,7 @@ console.log(frames[0]?.checksum.valid, warnings.length);
 
 // Or both layers at once: only checksum-verified frames reach the record parser.
 const { message, frameWarnings } = parseFramedAstm(bytes);
-console.log(results(message)[0]?.value, frameWarnings.length);
+console.log(results(message)[0]?.value === "28.6", frameWarnings.length); // true 0
 ```
 
 Frame warnings carry a frame number and byte offset, never record bytes. Checksums are emitted
@@ -148,11 +148,12 @@ import { parseAstmDate, toObject, toISO, toDate } from "@cosyte/astm";
 
 const collected = parseAstmDate("20240315"); // day precision, no time, no zone
 
-console.log(toObject(collected)); // { year: 2024, month: 3, day: 15 }
-console.log(toISO(collected)); // "2024-03-15", never a trailing Z
-console.log(toDate(collected)); // undefined: the zone is unstated
-console.log(toDate(collected, { assumeOffsetMinutes: -300 })); // 2024-03-15T05:00:00.000Z
-console.log(toISO(parseAstmDate("19881301"))); // undefined: month 13 is refused, not rolled over
+// A date that belongs to a person is not logged. Compare it with the synthetic value instead.
+console.log(toObject(collected)?.day === 15); // true: { year: 2024, month: 3, day: 15 }
+console.log(toISO(collected) === "2024-03-15"); // true, never a trailing Z
+console.log(toDate(collected) === undefined); // true: the zone is unstated
+console.log(toDate(collected, { assumeOffsetMinutes: -300 })?.toISOString() === "2024-03-15T05:00:00.000Z"); // true
+console.log(toISO(parseAstmDate("19881301")) === undefined); // true: month 13 is refused, not rolled over
 ```
 
 `assumeOffsetMinutes` is signed minutes east of UTC; an explicit `0` means "read it as UTC". A
@@ -171,7 +172,7 @@ const raw = buildAstmMessage({
   ],
   terminationCode: "N",
 });
-console.log(results(parseAstmRecords(raw))[0]?.value); // "28.6"
+console.log(results(parseAstmRecords(raw))[0]?.value === "28.6"); // true
 ```
 
 Emit writes the canonical `H|\^&` set and re-escapes embedded delimiters. It refuses, with a typed

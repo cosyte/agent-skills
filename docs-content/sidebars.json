@@ -8,7 +8,11 @@
       "label": "How-to guides",
       "items": ["add-the-routing-summary", "change-a-skill"]
     },
-    { "type": "category", "label": "Explanation", "items": ["how-agents-use-skills"] },
+    {
+      "type": "category",
+      "label": "Explanation",
+      "items": ["how-agents-use-skills", "what-is-safe-to-log"]
+    },
     {
       "type": "category",
       "label": "Reference",

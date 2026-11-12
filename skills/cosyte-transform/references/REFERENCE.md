@@ -32,15 +32,18 @@ import { parseDtm } from "@cosyte/hl7";
 import { toFhirDateTime, toFhirHumanName } from "@cosyte/transform";
 
 const name = toFhirHumanName({ familyName: "Public", givenName: "Jane", nameTypeCode: "L" });
-console.log(name.value === undefined ? "no value" : serializeResource(name.value));
-// {"use":"official","family":"Public","given":["Jane"]}
+// A name is not logged. Serialize it into a variable and check it.
+const nameJson = name.value === undefined ? undefined : serializeResource(name.value);
+// '{"use":"official","family":"Public","given":["Jane"]}' (synthetic)
+console.log(nameJson !== undefined); // true
 
+// A date is not logged either. Compare it with the synthetic value.
 const dob = toFhirDateTime(parseDtm("20260721"));
-console.log(dob.value); // "2026-07-21": date-only precision is kept exactly
+console.log(dob.value === "2026-07-21"); // true: date-only precision is kept exactly
 
 const naked = toFhirDateTime(parseDtm("20260721143000"));
-console.log(naked.value, naked.issues.map((i) => i.code));
-// reduced to date precision, TRANSFORM_TIMESTAMP_NO_TIMEZONE
+console.log(naked.value === "2026-07-21", naked.issues.map((i) => i.code));
+// true, reduced to date precision, with [ 'TRANSFORM_TIMESTAMP_NO_TIMEZONE' ]
 ```
 
 The fail-safe rule: on a time of day with no timezone, an assigning authority that does not

@@ -58,16 +58,23 @@ const buf = Buffer.from(
 );
 const ds = parseDicom(buf);
 
-console.log("patient", ds.patient.id, "issuer", ds.patient.issuerOfId);
-console.log("study", ds.study.instanceUid);
+// Read the patient and study identifiers into variables. Do not log them: the values in the
+// comments are synthetic.
+const patientId = ds.patient.id; // "MRN-42" (synthetic)
+const issuer = ds.patient.issuerOfId; // "SAMPLE-HOSP" (synthetic)
+const studyUid = ds.study.instanceUid; // "1.2.826.0.1.3680043.8.498.1.1" (synthetic)
+
+// Log only what is safe: booleans, a modality, dimensions, rescale numbers, a warning code.
+console.log("patient id and issuer present", patientId !== undefined, issuer !== undefined);
+console.log("study uid present", studyUid !== undefined);
 console.log("series", ds.series.modality, "image", ds.image.rows, "x", ds.image.columns);
 console.log("rescale slope", ds.image.rescaleSlope, "intercept", ds.image.rescaleIntercept);
 console.log("tolerated", ds.warnings.length, ds.warnings[0]?.code);
 ```
 
 ```text
-patient MRN-42 issuer SAMPLE-HOSP
-study 1.2.826.0.1.3680043.8.498.1.1
+patient id and issuer present true true
+study uid present true
 series CT image 512 x 512
 rescale slope 1 intercept -1024
 tolerated 1 DICOM_MISSING_PREAMBLE

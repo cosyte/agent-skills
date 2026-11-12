@@ -85,7 +85,9 @@ if (remit === undefined) throw new Error("not an 835");
 const claim = remit.claims[0];
 const adjustment = claim?.serviceLines[0]?.adjustments[0];
 console.log("paid", remit.payment.totalActualPayment?.toString(), "by", remit.payment.method);
-console.log("claim", claim?.patientControlNumber, "charged", claim?.totalChargeAmount?.toString());
+// The patient control number is an account number. Read it into a variable; do not log it.
+const accountNumber = claim?.patientControlNumber; // "PT-ACCT-001" (synthetic)
+console.log("claim has account number", accountNumber !== undefined, "charged", claim?.totalChargeAmount?.toString());
 console.log("patient owes", claim?.patientResponsibilityAmount?.toString());
 console.log("reason", adjustment?.groupCode, adjustment?.reasonCode, adjustment?.reasonDescription);
 console.log("warnings", ix.warnings.length);
@@ -93,7 +95,7 @@ console.log("warnings", ix.warnings.length);
 
 ```text
 paid 450.00 by ACH
-claim PT-ACCT-001 charged 500.00
+claim has account number true charged 500.00
 patient owes 50.00
 reason PR 1 Deductible Amount
 warnings 0

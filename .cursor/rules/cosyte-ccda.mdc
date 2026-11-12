@@ -75,10 +75,18 @@ const displayName = [...(name?.given ?? []), name?.family]
 const problem = doc.getProblems()[0];
 const allergen = doc.getAllergies()[0]?.allergies[0]?.allergen;
 
-console.log(doc.documentType, doc.getMrn(), displayName, toISO(patient?.birthTime));
+// Read the identifying fields into variables. Do not log them: the values in the comments are
+// synthetic.
+const mrn = doc.getMrn(); // "MRN001" (synthetic)
+const birthDate = toISO(patient?.birthTime); // "1980-01-01" (synthetic)
+// displayName is "Jane Doe" (synthetic)
+
+// Log only what is safe: a document type, booleans, codes from a code system, codes and counts.
+console.log(doc.documentType);
+console.log("patient fields present", mrn !== undefined, displayName !== "", birthDate !== undefined);
 console.log("problem", problem?.problems[0]?.value?.code, problem?.status);
 console.log("medication", doc.getMedications()[0]?.drug?.code);
-console.log("allergy", allergen?.code, allergen?.displayName);
+console.log("allergy", allergen?.code);
 console.log("warnings", doc.warnings.map((w) => w.code));
 console.log("round trip unchanged", parseCcda(doc.toString()).toString() === xml);
 ```
@@ -87,10 +95,11 @@ Expected output. Most lines are values the README asserts; the rest follow from 
 declarations. We have not run this exact snippet.
 
 ```text
-ccd MRN001 Jane Doe 1980-01-01
+ccd
+patient fields present true true true
 problem 59621000 active
 medication 314076
-allergy 7980 Penicillin G
+allergy 7980
 warnings []
 round trip unchanged true
 ```

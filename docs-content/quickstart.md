@@ -42,8 +42,9 @@ request matches its description, which is what the next step relies on.
 Send this prompt. Every value in the message is invented.
 
 ```text
-Write a Node.js script that parses this HL7 v2 message and prints the patient's MRN,
-full name and date of birth, the message type, and the ward. Log any parser warnings
+Write a Node.js script that parses this HL7 v2 message and reads the patient's MRN,
+full name and date of birth into variables without printing them. Print the message
+type, the ward, and the precision of the date of birth. Log any parser warnings
 by code and position only.
 
 MSH|^~\&|ADTAPP|MAIN|LIS|REF|20260419101500||ADT^A01^ADT_A01|MSG00001|P|2.5
@@ -59,8 +60,10 @@ that skill. The skill tells it to:
 
 - install `@cosyte/hl7` (`npm install @cosyte/hl7`);
 - call `parseHL7` and read the named helpers, `msg.patient?.mrn`, `msg.patient?.fullName`,
-  `msg.patient?.dateOfBirth?.raw`, `msg.meta.type` and `msg.visit?.location?.pointOfCare`, with
+  `msg.patient?.dateOfBirth`, `msg.meta.type` and `msg.visit?.location?.pointOfCare`, with
   optional chaining, since a helper returns `undefined` when its segment is absent;
+- keep the record number, name and date of birth in variables and print only the message type,
+  the ward and the date of birth's precision;
 - join the segments with a carriage return, the HL7 v2 segment separator, rather than the line
   breaks in the prompt;
 - log each warning's `code` and position, never the values.
@@ -68,13 +71,11 @@ that skill. The skill tells it to:
 The skill's own example prints:
 
 ```text
-Patient record number: MRN12345
-Full name: John Q Doe
-Date of birth: 19800115
-Precision: day
 Message type: ADT^A01^ADT_A01
-Sent at: 20260419101500
+Date of birth precision: day
 Ward: ICU
+Has record number: true
+Has full name: true
 ```
 
 An agent's answer varies from run to run; what the skill fixes is the package it reaches for, the

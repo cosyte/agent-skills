@@ -74,12 +74,17 @@ const { document, manifest } = deidentify(
   {},
 );
 
-console.log(document.loci.map((locus) => locus.value));
+// Print booleans and counts, never the loci's values.
+console.log("name still present:", document.loci.some((locus) => locus.value === name));
+console.log("date of birth still present:", document.loci.some((locus) => locus.value === dob));
+console.log("loci:", document.loci.length);
 console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.disposition}`));
 ```
 
 ```text
-[ null, '1990', '5.4 mmol/L' ]
+name still present: false
+date of birth still present: false
+loci: 3
 [ 'PID-5 NAMES removed', 'PID-7 DATES transformed' ]
 ```
 

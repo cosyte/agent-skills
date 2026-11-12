@@ -57,8 +57,9 @@ dependencies: it loads only the Node standard library.
 ## Example prompt
 
 ```text
-Write a Node.js script that parses this HL7 v2 message and prints the patient's MRN,
-full name and date of birth, the message type, and the ward. Log any parser warnings
+Write a Node.js script that parses this HL7 v2 message and reads the patient's MRN,
+full name and date of birth into variables without printing them. Print the message
+type, the ward, and the precision of the date of birth. Log any parser warnings
 by code and position only.
 
 MSH|^~\&|ADTAPP|MAIN|LIS|REF|20260419101500||ADT^A01^ADT_A01|MSG00001|P|2.5
@@ -87,13 +88,17 @@ const raw =
 
 const msg = parseHL7(raw);
 
-console.log("Patient record number:", msg.patient?.mrn);
-console.log("Full name:", msg.patient?.fullName);
-console.log("Date of birth:", msg.patient?.dateOfBirth?.raw);
-console.log("Precision:", msg.patient?.dateOfBirth?.precision);
+// Read identifying fields into variables. Do not log them: the values in the comments are synthetic.
+const mrn = msg.patient?.mrn; // "MRN12345" (synthetic)
+const fullName = msg.patient?.fullName; // "John Q Doe" (synthetic)
+const dateOfBirth = msg.patient?.dateOfBirth; // raw "19800115" (synthetic)
+
+// Log only what is safe: a message type, a precision, a ward code, a boolean.
 console.log("Message type:", msg.meta.type);
-console.log("Sent at:", msg.meta.timestamp?.raw);
+console.log("Date of birth precision:", dateOfBirth?.precision);
 console.log("Ward:", msg.visit?.location?.pointOfCare);
+console.log("Has record number:", mrn !== undefined);
+console.log("Has full name:", fullName !== undefined);
 
 // Tolerated deviations are data, not exceptions. Log code and position, never values.
 for (const w of msg.warnings) {
@@ -102,13 +107,11 @@ for (const w of msg.warnings) {
 ```
 
 ```text
-Patient record number: MRN12345
-Full name: John Q Doe
-Date of birth: 19800115
-Precision: day
 Message type: ADT^A01^ADT_A01
-Sent at: 20260419101500
+Date of birth precision: day
 Ward: ICU
+Has record number: true
+Has full name: true
 ```
 
 Helpers return `undefined` (never throw) when their segment is absent, so use `?.` throughout.

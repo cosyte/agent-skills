@@ -103,7 +103,8 @@ try {
 // Branch on the value[x] type before touching a magnitude, and compare on the UCUM code.
 const reading = readObservationValue(resource);
 if (reading?.type === "Quantity") {
-  console.log(reading.quantity?.value?.raw, reading.quantity?.code);
+  // The magnitude is clinical data: compare it, do not log it.
+  console.log(reading.quantity?.value?.raw === "120.0", reading.quantity?.code);
 }
 
 // resolvePath returns a repeating last segment as one list node: flatten it yourself.
@@ -121,7 +122,7 @@ declarations. We have not run this exact snippet.
 
 ```text
 [ 'DECIMAL_PRECISION_AT_RISK' ]
-120.0 mm[Hg]
+true mm[Hg]
 [ 'complex' ]
 true 0
 ```
