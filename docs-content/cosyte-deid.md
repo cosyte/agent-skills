@@ -63,8 +63,8 @@ npm install @cosyte/deid @cosyte/hl7
 
 ```text
 Before we share an HL7 v2 extract, remove the patient's name (PID-5) and generalize the
-date of birth (PID-7), keep the lab value in OBX-5, and show me a record of what was
-removed. Use placeholder values to test it.
+date of birth (PID-7), keep the lab value in OBX-5, and show me a value-free record of
+what was removed. Use placeholder values to test it.
 ```
 
 ## Result
@@ -92,12 +92,17 @@ const { document, manifest } = deidentify(
   {},
 );
 
-console.log(document.loci.map((locus) => locus.value));
+// Print booleans and counts, never the loci's values.
+console.log("name still present:", document.loci.some((locus) => locus.value === name));
+console.log("date of birth still present:", document.loci.some((locus) => locus.value === dob));
+console.log("loci:", document.loci.length);
 console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.disposition}`));
 ```
 
 ```text
-[ null, '1990', '5.4 mmol/L' ]
+name still present: false
+date of birth still present: false
+loci: 3
 [ 'PID-5 NAMES removed', 'PID-7 DATES transformed' ]
 ```
 

@@ -30,17 +30,24 @@ const xml = `<?xml version="1.0" encoding="UTF-8"?>
 const msg = parseScript(xml);
 const rx = newRx(msg); // the NewRx body, or undefined for another transaction
 
-console.log(msg.header.messageId, msg.warnings.length);
-console.log(rx?.patient?.name?.lastName, rx?.patient?.dateOfBirth);
-console.log(rx?.medication?.description, rx?.medication?.coded?.productCode?.system);
-console.log(rx?.medication?.sig?.sigText);
+// Read the patient's name and date of birth, and the free-text sig, into variables. Do not log
+// them: the values in the comments are synthetic.
+const lastName = rx?.patient?.name?.lastName; // "Testpatient" (synthetic)
+const dateOfBirth = rx?.patient?.dateOfBirth; // "1990-04-12" (synthetic)
+const sigText = rx?.medication?.sig?.sigText; // "Take 1 capsule by mouth three times daily for 10 days." (synthetic)
+
+// Log only what is safe: a count, booleans, the code system of a product code.
+console.log(msg.warnings.length);
+console.log("patient name and date of birth present", lastName !== undefined, dateOfBirth !== undefined);
+console.log(rx?.medication?.coded?.productCode?.system);
+console.log("sig present", sigText !== undefined);
 ```
 
 ```text
-SYNTH-MSG-0001 0
-Testpatient 1990-04-12
-Amoxicillin 500 MG Oral Capsule NDC
-Take 1 capsule by mouth three times daily for 10 days.
+0
+patient name and date of birth present true true
+NDC
+sig present true
 ```
 
 ## Read a Telecom response
@@ -122,11 +129,12 @@ import { dateValue, toObject, toISO, toDate } from "@cosyte/ncpdp";
 
 const dos = dateValue("20260629"); // a synthetic Date of Service
 
-console.log(toObject(dos)); // { year: 2026, month: 6, day: 29 }, month is 1 to 12
-console.log(toISO(dos)); // "2026-06-29"
-console.log(toDate(dos)); // undefined: no zone stated, none assumed
-console.log(toDate(dos, { assumeOffsetMinutes: -300 })); // 2026-06-29T05:00:00.000Z
-console.log(dateValue("20240230")); // undefined: no such day, never rolled over
+// A date of service belongs to a person, so it is not logged. Compare it with the synthetic value.
+console.log(toObject(dos)?.month === 6); // true: { year: 2026, month: 6, day: 29 }, month is 1 to 12
+console.log(toISO(dos) === "2026-06-29"); // true
+console.log(toDate(dos) === undefined); // true: no zone stated, none assumed
+console.log(toDate(dos, { assumeOffsetMinutes: -300 })?.toISOString() === "2026-06-29T05:00:00.000Z"); // true
+console.log(dateValue("20240230") === undefined); // true: no such day, never rolled over
 ```
 
 The names `dateValue`, `toObject`, `toISO` and `toDate` are the same in every Cosyte parser; alias

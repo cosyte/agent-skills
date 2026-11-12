@@ -42,7 +42,7 @@ npm install -g @cosyte/cli
 Or without installing:
 
 ```bash
-npx --package @cosyte/cli cosyte parse message.hl7
+npx --package @cosyte/cli cosyte inspect message.hl7   # value-free summary
 ```
 
 Node 22.0.0 or later (the package's `engines` field), tested on 22, 24 and 26. The short form
@@ -75,10 +75,10 @@ From the README, with a synthetic ADT^A01 (HL7 v2 ends each segment with a carri
 ```bash
 printf 'MSH|^~\\&|SENDINGAPP|SENDINGFAC|RECEIVINGAPP|RECEIVINGFAC|20240101120000||ADT^A01|MSG00001|P|2.5\rEVN|A01|20240101120000\rPID|1||MRN-000123^^^HOSP^MR||ZZSENTINELLAST^ZZSENTINELFIRST^M||19800101|M\rPV1|1|I|WARD^101^A\r' > message.hl7
 
-cosyte parse message.hl7              # format autodetected, typed JSON on stdout
-cosyte inspect message.hl7            # value-free summary: type, version, segment counts
-cosyte validate message.hl7; echo $?  # 0 valid, 1 invalid, 65 unparseable
-cosyte convert message.hl7 --to fhir  # a FHIR message Bundle on stdout
+cosyte parse message.hl7 > parsed.json            # format autodetected, typed JSON; it holds field values, so write it to a file, not the terminal
+cosyte inspect message.hl7                        # value-free summary: type, version, segment counts
+cosyte validate message.hl7; echo $?              # 0 valid, 1 invalid, 65 unparseable
+cosyte convert message.hl7 --to fhir > bundle.json  # a FHIR message Bundle, written to a file for the same reason
 ```
 
 Register the MCP server (local stdio subprocess) in an MCP client config, as the README gives it:

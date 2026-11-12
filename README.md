@@ -165,6 +165,17 @@ Claude Code when a project has no `CLAUDE.md`, and the other tools listed at
 [agents.md](https://agents.md)), copy the "Which skill to use" section of [AGENTS.md](AGENTS.md)
 into your project's `AGENTS.md`.
 
+### Pin the packages the skills name
+
+The skills tell an agent to install `@cosyte` packages, and every one of them is below 1.0. Below
+1.0 a break can ship in a patch release, so a caret range such as `^0.1.10` does not protect a
+consumer. Install the exact version a skill was checked against (its `metadata.version`), with
+`--save-exact` so `package.json` records no range:
+
+```bash
+npm install --save-exact @cosyte/hl7@0.1.10
+```
+
 ### The MCP server
 
 `@cosyte/cli` ships a local MCP server, `cosyte-mcp`, with `parse`, `validate`, `inspect` and
@@ -248,8 +259,10 @@ describes, never in a public issue.
 ### PHI and safety
 
 Every example in these skills uses synthetic data: invented names, invented record numbers and no
-real person. The skills tell agents to keep it that way, to use `@cosyte/synth` for test data, and
-to log diagnostic codes rather than values. Never paste real patient data into a prompt, a fixture
+real person. No example prints a value that identifies a person: it reads the value into a variable
+and prints a code, a count, a precision or a boolean, as [What is safe to
+log](docs-content/what-is-safe-to-log.md) lists. The skills tell agents to keep it that way, to use
+`@cosyte/synth` for test data, and to log diagnostic codes rather than values. Never paste real patient data into a prompt, a fixture
 or a log. The libraries and these skills make no compliance claim on your behalf; transport,
 storage, retention, access control and your own logs remain your responsibility.
 

@@ -31,21 +31,25 @@ declare const raw: string;
 
 const msg = parseHL7(raw);
 
-// Named helpers: undefined (never a throw) when the segment is absent.
-console.log(msg.patient?.mrn, msg.meta.messageCode, msg.meta.triggerEvent);
+// Named helpers: undefined (never a throw) when the segment is absent. A record number
+// identifies a patient, so read it into a variable and do not log it.
+const mrn = msg.patient?.mrn;
+console.log(msg.meta.messageCode, msg.meta.triggerEvent, "has record number:", mrn !== undefined);
 
 // Dot-paths: SEG.field.component.subcomponent. Dot numbers are 1-based HL7 positions.
-// [N] is 0-indexed per the type declarations, for segment and field repeats.
-console.log(msg.get("PID.5.1")); // family name
-console.log(msg.get("OBX[1].5")); // OBX-5 of the second OBX
-console.log(msg.get("PID.3[1].1")); // second repetition of PID-3, component 1
+// [N] is 0-indexed per the type declarations, for segment and field repeats. These read
+// identifying or clinical values: keep them in variables and log only whether they are present.
+const familyName = msg.get("PID.5.1"); // family name
+const secondObxValue = msg.get("OBX[1].5"); // OBX-5 of the second OBX
+const secondIdentifier = msg.get("PID.3[1].1"); // second repetition of PID-3, component 1
+console.log(familyName !== undefined, secondObxValue !== undefined, secondIdentifier !== undefined);
 console.log(msg.getAll("NK1").length); // every NK1 segment
 
 // Structural traversal: segment, field, then a typed coercion.
 for (const obx of msg.segments("OBX")) {
-  const id = obx.field(3).asCwe().identifier; // OBX-3.1
-  const val = obx.field(5).value; // first component of the first repetition
-  console.log(id, val);
+  const id = obx.field(3).asCwe().identifier; // OBX-3.1, a code
+  const val = obx.field(5).value; // first component of the first repetition: a result, not logged
+  console.log(id, val !== undefined);
 }
 console.log(msg.allSegments().length);
 ```
@@ -86,7 +90,7 @@ const msg = parseHL7(raw);
 
 // Flat list of every OBX, grouped or not.
 for (const obs of msg.observations()) {
-  console.log(obs.identifier.text, obs.value, obs.units?.identifier);
+  console.log(obs.identifier.identifier, obs.valueType, obs.units?.identifier); // codes, never obs.value
 }
 
 // OBR to OBX grouping for order processing.
@@ -115,7 +119,7 @@ import { parseHL7 } from "@cosyte/hl7";
 declare const raw: string;
 
 for (const al of parseHL7(raw).allergies()) {
-  console.log(al.source, al.code?.text, al.severity, al.reaction);
+  console.log(al.source, al.code?.identifier, al.severity); // a code, not the free-text reaction
   if (al.deleteRequested === true) {
     // IAM-6 was "D": the sender asks you to delete an allergy it sent earlier, identified by
     // al.uniqueIdentifier?.entityIdentifier. Nothing was deleted for you.
@@ -145,9 +149,9 @@ declare const raw: string;
 const msg = parseHL7(raw);
 
 for (const appt of msg.appointments()) {
-  console.log(appt.fillerAppointmentId, appt.fillerStatusCode?.identifier); // status verbatim
+  console.log(appt.fillerStatusCode?.identifier); // status verbatim
   const provider = appt.resources.find((r) => r.kind === "personnel");
-  console.log(provider?.person?.familyName);
+  console.log(provider?.person?.familyName !== undefined); // a name is read, never logged
 }
 
 for (const doc of msg.documents()) {
@@ -181,7 +185,7 @@ for (const t of med?.timings ?? []) {
   console.log(t.repeatPattern?.kind); // "parametric" | "named" | "unknown", provenance only
   console.log(t.repeatPattern?.interval); // e.g. { count: 6, unit: "H" }
   console.log(t.totalOccurrences); // from TQ1-14
-  console.log(t.startDateTime?.raw, t.startDateTime?.precision);
+  console.log(t.startDateTime?.precision); // the precision, not the date
 }
 ```
 
@@ -196,10 +200,12 @@ prior identifiers, PID the surviving ones; the direction is a constant, never in
 import { parseHL7 } from "@cosyte/hl7";
 
 declare const rawA40: string;
+declare function repoint(priorId: string | undefined, survivingId: string | undefined): void;
 
 for (const ev of parseHL7(rawA40).identityEvents()) {
   if (ev.kind === "merge" && ev.prior && ev.surviving && ev.warnings.length === 0) {
-    console.log(ev.prior.identifiers[0]?.idNumber, "->", ev.surviving.identifiers[0]?.idNumber);
+    // Identifiers identify a patient: pass them on, never log them.
+    repoint(ev.prior.identifiers[0]?.idNumber, ev.surviving.identifiers[0]?.idNumber);
   } else if (ev.warnings.length > 0) {
     // MERGE_MISSING_PRIOR_OR_SURVIVOR: incomplete MRG to PID pair. Route for review.
   }
@@ -293,7 +299,7 @@ const profile: ConformanceProfile = {
 };
 
 const { findings } = validateAgainstProfile(parseHL7(raw), profile);
-for (const f of findings) console.log(f.severity, f.code, f.message);
+for (const f of findings) console.log(f.severity, f.code); // not f.message: it may quote a value
 ```
 
 - It never throws (a malformed profile yields `PROFILE_MALFORMED` findings); use
@@ -335,7 +341,8 @@ const site = defineProfile({
 
 const msg = parseHL7(raw, site);
 console.log(msg.profile?.lineage); // ["epic", "myhospital-adt"]
-console.log(msg.part("PID")?.get("siteMrn")?.value); // the value at PID-19
+const siteMrn = msg.part("PID")?.get("siteMrn")?.value; // the value at PID-19, not logged
+console.log(siteMrn !== undefined);
 ```
 
 - `customSegments` names fields on Z-segments; declared Z-segments stop raising `UNKNOWN_SEGMENT`.
@@ -365,13 +372,14 @@ and `ambiguity` when a slash date could be read two ways.
 ```ts
 import { formatDtm, parseDtm, toDate, toISO, toObject } from "@cosyte/hl7";
 
-console.log(toObject(parseDtm("19880705"))); // { year: 1988, month: 7, day: 5 }
-console.log(toISO(parseDtm("19880705"))); // "1988-07-05", no fabricated Z
-console.log(toISO(parseDtm("20250102153045.5-0500"))); // "2025-01-02T15:30:45.5-05:00"
-console.log(toDate(parseDtm("20250102"))); // undefined: no offset stated, none assumed
-console.log(toDate(parseDtm("20250102"), { assumeOffsetMinutes: -300 })); // 05:00Z instant
-console.log(formatDtm(parseDtm("20250102153045-0000"))); // byte-exact round trip
-console.log(toISO(parseDtm("20230229"))); // undefined: not a leap year
+// A date that belongs to a person is not logged. Compare it with the synthetic value instead.
+console.log(toObject(parseDtm("20250705"))?.month === 7); // true: { year: 2025, month: 7, day: 5 }
+console.log(toISO(parseDtm("20250705")) === "2025-07-05"); // true, no fabricated Z
+console.log(toISO(parseDtm("20250102153045.5-0500")) === "2025-01-02T15:30:45.5-05:00"); // true
+console.log(toDate(parseDtm("20250102")) === undefined); // true: no offset stated, none assumed
+console.log(toDate(parseDtm("20250102"), { assumeOffsetMinutes: -300 })?.toISOString() === "2025-01-02T05:00:00.000Z"); // true
+console.log(formatDtm(parseDtm("20250102153045-0000")) === "20250102153045-0000"); // true: byte-exact round trip
+console.log(toISO(parseDtm("20230229")) === undefined); // true: not a leap year
 ```
 
 - `toObject`, `toISO` and `toDate` return `undefined` (never throw) for an invalid value,
@@ -394,10 +402,10 @@ declare const raw: string; // MSH-7 written as "05/07/1988"
 
 const ts = parseHL7(raw).meta.timestamp;
 if (ts?.ambiguity?.code === AMBIGUOUS_DATE_ORDER) {
-  console.log(ts.ambiguity.candidates[0].isoDate, ts.ambiguity.candidates[1].isoDate);
+  console.log(ts.ambiguity.candidates.length); // 2: the two readings, not logged as dates
 }
 const dayFirst = parseHL7(raw, { dateFormats: ["DD/MM/YYYY"] });
-console.log(dayFirst.meta.timestamp?.month); // 7
+console.log(dayFirst.meta.timestamp?.month === 7); // true
 ```
 
 The ambiguity report exists only on `msg.meta.timestamp`, the one field where

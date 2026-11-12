@@ -78,20 +78,27 @@ const stream =
 const msg = parseAstmRecords(stream);
 const [first] = results(msg);
 
-console.log(first?.value, first?.units);
+// Read the value and the patient identifiers into variables. Do not log them: the values in the
+// comments are synthetic.
+const value = first?.value; // "28.6" (synthetic)
+const practiceId = patient(msg)?.practiceAssignedId; // "PRACTICE-0001" (synthetic)
+const laboratoryId = patient(msg)?.laboratoryAssignedId; // "LAB-0002" (synthetic)
+
+// Log only what is safe: units, status and flag meanings, a test code, booleans, a count.
+console.log("has value:", value !== undefined, "units:", first?.units);
 console.log(first?.status.meaning, first?.status.isActiveFinal);
 console.log(first?.flag?.meaning);
 console.log(first?.universalTestId?.localCode);
-console.log(patient(msg)?.practiceAssignedId, patient(msg)?.laboratoryAssignedId);
+console.log("has patient ids:", practiceId !== undefined && laboratoryId !== undefined);
 console.log(msg.warnings.length);
 ```
 
 ```text
-28.6 U/L
+has value: true units: U/L
 final true
 normal
 687
-PRACTICE-0001 LAB-0002
+has patient ids: true
 0
 ```
 

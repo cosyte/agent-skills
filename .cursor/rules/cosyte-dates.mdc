@@ -49,20 +49,22 @@ import {
   validateParts,
 } from "@cosyte/dates";
 
-// A date of birth that arrived as a year and nothing more. It stays a year.
-const birthYear = { year: 1988 };
-console.log(toISO(birthYear), "| precision:", precisionOf(birthYear));
+// A date that arrived as a year and nothing more. It stays a year. These dates are invented
+// event dates; a date of birth or of service belongs to a person, so print its precision, not the
+// date.
+const reportYear = { year: 2024 };
+console.log(toISO(reportYear), "| precision:", precisionOf(reportYear));
 
 // A calendar date. No midnight is invented and no zone is attached.
-const admitted = { year: 1988, month: 5, day: 7 };
-console.log(toISO(admitted), "| Temporal:", toTemporal(admitted).constructor.name);
+const reportDate = { year: 2024, month: 5, day: 7 };
+console.log(toISO(reportDate), "| Temporal:", toTemporal(reportDate).constructor.name);
 
 // A timestamp whose sender stated its offset. The offset is kept exactly.
-const collected = { year: 1988, month: 5, day: 7, hour: 13, minute: 45, offsetMinutes: 330 };
+const collected = { year: 2024, month: 5, day: 7, hour: 13, minute: 45, offsetMinutes: 330 };
 console.log(toISO(collected), "->", toInstant(collected).toString());
 
 // The same timestamp with no offset. Nothing guesses one.
-const unknownZone = { year: 1988, month: 5, day: 7, hour: 13, minute: 45 };
+const unknownZone = { year: 2024, month: 5, day: 7, hour: 13, minute: 45 };
 try {
   toInstant(unknownZone);
 } catch (error) {
@@ -77,14 +79,14 @@ const result = validateParts({ year: 2025, month: 2, day: 29 });
 console.log(result.valid ? "valid" : result.issues[0]?.message);
 ```
 
-The README shows these lines for the year, date, offset, missing-zone and invalid-date cases,
-identical under every host `TZ` (the zoned line in this snippet is our addition and is not in the
-README output):
+The README shows lines like these for the year, date, offset, missing-zone and invalid-date cases,
+identical under every host `TZ`. The dates here are invented event dates, not the README's, and the
+zoned line in this snippet is our addition and is not in the README output:
 
 ```text
-1988 | precision: year
-1988-05-07 | Temporal: PlainDate
-1988-05-07T13:45+05:30 -> 1988-05-07T08:15:00Z
+2024 | precision: year
+2024-05-07 | Temporal: PlainDate
+2024-05-07T13:45+05:30 -> 2024-05-07T08:15:00Z
 MissingZoneError
 day 29 does not exist: February 2025 has 28 days, because 2025 is not a leap year in the proleptic Gregorian calendar
 ```

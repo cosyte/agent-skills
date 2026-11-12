@@ -213,10 +213,11 @@ import { toDate, toISO, toObject, type TS } from "@cosyte/ccda";
 
 const onset: TS = { raw: "20260628" };
 
-console.log(toObject(onset)); // { year: 2026, month: 6, day: 28 }, only the stated parts
-console.log(toISO(onset)); // "2026-06-28", no trailing Z
-console.log(toDate(onset)); // undefined: the value stated no timezone
-console.log(toDate(onset, { assumeOffsetMinutes: -300 })?.toISOString()); // "2026-06-28T05:00:00.000Z"
+// A date that belongs to a person is not logged. Compare it with the synthetic value instead.
+console.log(toObject(onset).day === 28); // true: { year: 2026, month: 6, day: 28 }, only the stated parts
+console.log(toISO(onset) === "2026-06-28"); // true, no trailing Z
+console.log(toDate(onset) === undefined); // true: the value stated no timezone
+console.log(toDate(onset, { assumeOffsetMinutes: -300 })?.toISOString() === "2026-06-28T05:00:00.000Z"); // true
 ```
 
 - `toObject` returns a frozen `DateParts` with only the stated components; `offsetMinutes` is present

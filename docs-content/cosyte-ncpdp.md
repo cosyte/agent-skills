@@ -54,8 +54,9 @@ parse through the same entry point.
 
 ```text
 Build a synthetic NCPDP Telecom D.0 B1 billing claim, serialize it, then parse it back
-and print the cardholder ID, the prescription number, the product ID and qualifier,
-and the quantity dispensed.
+and read the cardholder ID and the prescription number into variables without printing
+them. Print the product ID and qualifier, the quantity dispensed, and whether the
+cardholder ID and prescription number are present.
 ```
 
 ## Result
@@ -92,14 +93,18 @@ const t = parseTelecom(wire);
 const c = claim(t);
 
 console.log(t.kind, t.header.transactionCode, t.warnings.length);
-console.log(c?.cardholderId, c?.prescriptionReferenceNumber);
+// Read the member and prescription numbers into variables. Do not log them: the values in the
+// comments are synthetic.
+const cardholderId = c?.cardholderId; // "SYNTHCARD09" (synthetic)
+const rxNumber = c?.prescriptionReferenceNumber; // "RX0000001" (synthetic)
+console.log("cardholder id and Rx number present", cardholderId !== undefined, rxNumber !== undefined);
 console.log(c?.product?.id, c?.product?.qualifier);
 console.log(c?.quantityDispensed?.source, c?.quantityDispensed?.impliedDecimal);
 ```
 
 ```text
 request B1 0
-SYNTHCARD09 RX0000001
+cardholder id and Rx number present true true
 99999999999 03
 30000 30.000
 ```
