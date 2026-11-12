@@ -2,7 +2,7 @@
 // reader wrote and the markers in the channel's TypeScript, plus the PHI scan of the output.
 // MIGRATION-REPORT.md is for a reader, report.json for a program; both say the same thing.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, lstatSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, openSync, fstatSync, closeSync } from "node:fs";
 import { join, relative, resolve, sep, dirname } from "node:path";
 import { capital, PATHWAYS_VERSION, STATUS_WORDS } from "./convert.mjs";
 
@@ -65,12 +65,20 @@ export function phiScan(projectDir, dirs) {
         skipped += 1;
         continue;
       }
-      if (lstatSync(file).size > 16 * 1024 * 1024) {
+      // One open file: its size and its text come from the same descriptor.
+      const fd = openSync(file, "r");
+      let text;
+      try {
+        if (fstatSync(fd).size > 16 * 1024 * 1024) text = null;
+        else text = readFileSync(fd, "utf8");
+      } finally {
+        closeSync(fd);
+      }
+      if (text === null) {
         findings.push({ file: rel, line: 0, kind: "too-large-to-scan" });
         continue;
       }
       scanned += 1;
-      const text = readFileSync(file, "utf8");
       for (const { kind, re, ok } of PHI_PATTERNS) {
         for (const m of text.matchAll(re)) {
           if (ok(m[0])) continue;
@@ -148,7 +156,7 @@ export function exitCode(report) {
 }
 
 
-const cell = (s) => String(s ?? "").replace(/\|/g, "\\|");
+const cell = (s) => String(s ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 
 export function renderMarkdown(report) {
   const s = report.summary;

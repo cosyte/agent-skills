@@ -196,6 +196,16 @@ test("a channel or step name cannot climb out of the project", () => {
   assert.ok(written.some((f) => f.split(sep).join("/") === "migration/evil-x/source/D1-S1-escape.js"));
 });
 
+test("a name with a pipe or a backslash cannot break the report's table", () => {
+  const work = scratch();
+  const xml = readFileSync(exportFile, "utf8").replace("<name>Patient class</name>", "<name>Pipe | and \\ back</name>");
+  const file = join(work, "pipe.xml");
+  writeFileSync(file, xml);
+  run("read-export.mjs", [file, "--out", join(work, "p")]);
+  const md = readFileSync(join(work, "p", "migration", "synth-adt-feed", "MIGRATION-REPORT.md"), "utf8");
+  assert.ok(md.includes("| S2 | step | Pipe \\| and \\\\ back |"), "the name is not escaped");
+});
+
 test("an existing channel folder is never overwritten", () => {
   const { project } = convert();
   const again = run("read-export.mjs", [exportFile, "--out", project]);
